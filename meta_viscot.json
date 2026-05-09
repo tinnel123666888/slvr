@@ -1,0 +1,10 @@
+[
+    {
+        "ds_name":  "viscot",
+        "data_path": "/path/to/your/training_data.jsonl",
+        "image_folder": "/path/to/your/images/",
+        "ds_type": "Q_A"
+    }
+    
+]
+
