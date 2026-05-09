@@ -8,8 +8,8 @@ Official training and inference code for **SLVR**, accepted at ICML 2026.
 
 | Dataset | Description | Link |
 |---------|-------------|------|
-| **SLV-Set** | Stage-1 SFT training data | [tinnel123/slv-set](https://huggingface.co/datasets/tinnel123/slv-set) |
-| **SV-QA** | Stage-2 M-GRPO training data | [tinnel123/sv-qa](https://huggingface.co/datasets/tinnel123/sv-qa) |
+| **SLV-Set** | Training data for both Stage-1 SFT and Stage-2 M-GRPO | [tinnel123/slv-set](https://huggingface.co/datasets/tinnel123/slv-set) |
+| **SV-QA** | Evaluation benchmark | [tinnel123/sv-qa](https://huggingface.co/datasets/tinnel123/sv-qa) |
 
 ---
 
@@ -46,15 +46,17 @@ Stage-1 reads from `meta_viscot.json`. Edit it to point to your local copy of SL
 
 Download SLV-Set from [tinnel123/slv-set](https://huggingface.co/datasets/tinnel123/slv-set) and update these two paths accordingly.
 
-### Stage-2 M-GRPO Data (SV-QA)
+### Stage-2 M-GRPO Data (SLV-Set)
 
-Stage-2 reads data paths via environment variables (set before running the script):
+Stage-2 also uses SLV-Set (the 2-question split). Set the following environment variables before running the script:
 
-- `DATA_PATH`: path to the Stage-2 training JSON (SV-QA).
+- `DATA_PATH`: path to the Stage-2 training JSON from SLV-Set.
 - `IMAGE_FOLDER`: root directory for images.
 - `CHKPT_PATH`: path to the Stage-1 checkpoint.
 
-Download SV-QA from [tinnel123/sv-qa](https://huggingface.co/datasets/tinnel123/sv-qa).
+### Evaluation Benchmark (SV-QA)
+
+SV-QA is our evaluation benchmark for measuring semantic visual reasoning. Download it from [tinnel123/sv-qa](https://huggingface.co/datasets/tinnel123/sv-qa).
 
 ---
 
@@ -107,7 +109,7 @@ bash scripts/finetune_lvr_stage1_7b_viscot.sh
 ```bash
 export MODEL_NAME="Qwen/Qwen2.5-VL-7B-Instruct"
 export CHKPT_PATH="/path/to/stage1_checkpoint"
-export DATA_PATH="/path/to/sv-qa/training_data.json"
+export DATA_PATH="/path/to/slv-set/stage2_training_data.json"
 export IMAGE_FOLDER="/path/to/images/"
 export OUTPUT_DIR="stage2_mgrpo_checkpoints"
 
