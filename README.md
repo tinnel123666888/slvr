@@ -1,21 +1,34 @@
-# SLVR ICML2026
+# SLVR: Semantic-Enriched Latent Visual Reasoning (ICML 2026)
 
-This repository contains the public training and inference code for SLVR (ICML 2026 submission version).
+Official training and inference code for **SLVR**, accepted at ICML 2026.
 
-## Environment
+---
+
+## Datasets
+
+| Dataset | Description | Link |
+|---------|-------------|------|
+| **SLV-Set** | Stage-1 SFT training data | [tinnel123/slv-set](https://huggingface.co/datasets/tinnel123/slv-set) |
+| **SV-QA** | Stage-2 M-GRPO training data | [tinnel123/sv-qa](https://huggingface.co/datasets/tinnel123/sv-qa) |
+
+---
+
+## Environment Setup
 
 ```bash
 conda env create -f environment.yaml
-conda activate train
+conda activate slvr
 pip install qwen-vl-utils
 pip install flash-attn --no-build-isolation
 ```
 
-## 1) 数据集怎么准备
+---
 
-### Stage-1 SFT 数据
+## 1. Data Preparation
 
-Stage-1 读取 `meta_viscot.json`，格式如下：
+### Stage-1 SFT Data (SLV-Set)
+
+Stage-1 reads from `meta_viscot.json`. Edit it to point to your local copy of SLV-Set:
 
 ```json
 [
@@ -28,32 +41,40 @@ Stage-1 读取 `meta_viscot.json`，格式如下：
 ]
 ```
 
-你需要填写两条路径：
+- `data_path`: path to the training annotation JSONL file.
+- `image_folder`: root directory for images referenced in the JSONL.
 
-- `data_path`: 训练标注 JSONL 路径。
-- `image_folder`: 该 JSONL 里图片路径对应的根目录。
+Download SLV-Set from [tinnel123/slv-set](https://huggingface.co/datasets/tinnel123/slv-set) and update these two paths accordingly.
 
-### Stage-2 M-GRPO 数据
+### Stage-2 M-GRPO Data (SV-QA)
 
-Stage-2 通过环境变量读取：
+Stage-2 reads data paths via environment variables (set before running the script):
 
-- `DATA_PATH`: Stage-2 训练 JSON（例如 2q 数据）。
-- `IMAGE_FOLDER`: 图像根目录。
-- `CHKPT_PATH`: Stage-1 checkpoint 路径。
+- `DATA_PATH`: path to the Stage-2 training JSON (SV-QA).
+- `IMAGE_FOLDER`: root directory for images.
+- `CHKPT_PATH`: path to the Stage-1 checkpoint.
 
-## 2) Judge 怎么配置（Stage-2）
+Download SV-QA from [tinnel123/sv-qa](https://huggingface.co/datasets/tinnel123/sv-qa).
 
-Stage-2 judge 不再写死路径，全部用环境变量：
+---
 
-- `MGRPO_JUDGE_BROKER_URL`: judge broker 服务地址。
-- `MGRPO_JUDGE_BROKER_APPID`: broker appid / 模型路由标识。
-- `MGRPO_JUDGE_PORT`: judge 推理端口（默认 8000）。
-- `MGRPO_JUDGE_WORKERS`: judge 并发线程数。
-- `MGRPO_JUDGE_TIMEOUT`: 单请求超时秒数。
-- `MGRPO_JUDGE_IP_REFRESH_INTERVAL`: IP 刷新间隔。
-- `MGRPO_DISABLE_LLM_JUDGE`: 设为 `1` 时关闭远程 judge，走 fallback。
+## 2. Judge Configuration (Stage-2)
 
-最小示例：
+Stage-2 uses an LLM judge served via vLLM. Judge settings are configured through environment variables — **no code changes needed** for most setups.
+
+The judge logic lives in `src/train/mgrpo_reward_funcs.py` (around lines 31–36). If you need to customize how the judge broker is called or add authentication, edit that file directly.
+
+| Variable | Description |
+|----------|-------------|
+| `MGRPO_JUDGE_BROKER_URL` | URL of the judge broker service |
+| `MGRPO_JUDGE_BROKER_APPID` | App ID / model routing key |
+| `MGRPO_JUDGE_PORT` | vLLM inference port (default: `8000`) |
+| `MGRPO_JUDGE_WORKERS` | Number of concurrent judge threads |
+| `MGRPO_JUDGE_TIMEOUT` | Per-request timeout in seconds |
+| `MGRPO_JUDGE_IP_REFRESH_INTERVAL` | Judge IP refresh interval |
+| `MGRPO_DISABLE_LLM_JUDGE` | Set to `1` to disable remote judge (uses fallback) |
+
+Minimal example:
 
 ```bash
 export MGRPO_JUDGE_BROKER_URL="http://your-broker-host:port/api"
@@ -61,63 +82,73 @@ export MGRPO_JUDGE_BROKER_APPID="your-judge-appid"
 export MGRPO_DISABLE_LLM_JUDGE=0
 ```
 
-## 3) 训练怎么跑
+To run **without** a judge (e.g., for debugging):
 
-### Stage-1
+```bash
+export MGRPO_DISABLE_LLM_JUDGE=1
+```
+
+---
+
+## 3. Training
+
+### Stage-1: Supervised Fine-Tuning
 
 ```bash
 export MODEL_NAME="Qwen/Qwen2.5-VL-7B-Instruct"
 export DATA_PATH="$(pwd)/meta_viscot.json"
 export OUTPUT_DIR="stage1_checkpoints"
+
 bash scripts/finetune_lvr_stage1_7b_viscot.sh
 ```
 
-### Stage-2
+### Stage-2: M-GRPO
 
 ```bash
 export MODEL_NAME="Qwen/Qwen2.5-VL-7B-Instruct"
 export CHKPT_PATH="/path/to/stage1_checkpoint"
-export DATA_PATH="/path/to/viscot_363k_2q_qwen.json"
-export IMAGE_FOLDER="/path/to/cot_images/"
+export DATA_PATH="/path/to/sv-qa/training_data.json"
+export IMAGE_FOLDER="/path/to/images/"
 export OUTPUT_DIR="stage2_mgrpo_checkpoints"
 
-# judge (按需开启)
+# Judge settings
 export MGRPO_JUDGE_BROKER_URL="http://your-broker-host:port/api"
 export MGRPO_JUDGE_BROKER_APPID="your-judge-appid"
 
 bash scripts/finetune_lvr_stage2_7b_mgrpo_viscot.sh
 ```
 
-## 4) 推理怎么用
+---
 
-推理脚本：`inf_batch_dir_old.py`
+## 4. Inference
 
-你需要在脚本内 `Config` 里设置：
+The inference script is `inf_batch_dir_old.py`. Edit the `Config` class at the top of the file:
 
-- `MODEL_PATH`: checkpoint 路径。
-- `INPUT_DIR`: 待推理 JSON 文件目录（递归读取 `*.json`）。
-- `BATCH_SIZE`: 可通过环境变量覆盖。
+| Field | Description |
+|-------|-------------|
+| `MODEL_PATH` | Path to the trained checkpoint |
+| `INPUT_DIR` | Directory of input JSON files (scanned recursively for `*.json`) |
+| `OUTPUT_DIR` | Directory to write results |
+| `STEPS` | Number of latent reasoning steps (default: `8`) |
+| `DECODING_STRATEGY` | Set to `"latent"` for SLVR-style inference |
+| `BATCH_SIZE` | Batch size (can also be set via environment variable) |
 
-运行方式：
+The script auto-detects available GPUs and falls back gracefully on OOM.
 
 ```bash
-# 单卡或自动多卡
 python inf_batch_dir_old.py
-
-# 可选：指定可见 GPU 和 batch size
-GPU_IDS=0,1 BATCH_SIZE=64 python inf_batch_dir_old.py
 ```
 
-输出位置：
+---
 
-- 根目录：`./old_test/<checkpoint_parent>/test_slvr_results_<STEP>/`
-- 每个输入 json 会生成对应的 `<name>_results.json`
+## Citation
 
-## Notes
+If you find this work useful, please cite our paper:
 
-- `wandb/` 是运行产物，不应提交。
-- 脚本内不再包含机器私有绝对路径。
-
-## License
-
-Apache-2.0
+```bibtex
+@inproceedings{slvr2026,
+  title     = {Semantic-Enriched Latent Visual Reasoning},
+  booktitle = {Proceedings of the 43rd International Conference on Machine Learning (ICML)},
+  year      = {2026},
+}
+```
