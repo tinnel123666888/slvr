@@ -1,6 +1,6 @@
-# SSLVR: Semantic-Enriched Latent Visual Reasoning (ICML 2026)
+# SLVR: Semantic-Enriched Latent Visual Reasoning (ICML 2026)
 
-Official training and inference code for **SSLVR**, accepted at ICML 2026.
+Official training and inference code for **SLVR**, accepted at ICML 2026.
 
 ---
 
@@ -132,7 +132,7 @@ The inference script is `inf_batch_dir_old.py`. Edit the `Config` class at the t
 | `INPUT_DIR` | Directory of input JSON files (scanned recursively for `*.json`) |
 | `OUTPUT_DIR` | Directory to write results |
 | `STEPS` | Number of latent reasoning steps (default: `8`) |
-| `DECODING_STRATEGY` | Set to `"latent"` for SSLVR-style inference |
+| `DECODING_STRATEGY` | Set to `"latent"` for SLVR-style inference |
 | `BATCH_SIZE` | Batch size (can also be set via environment variable) |
 
 The script auto-detects available GPUs and falls back gracefully on OOM.

@@ -1,9 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-SSLVR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$SSLVR_ROOT" || exit 1
-export PYTHONPATH="$SSLVR_ROOT:$SSLVR_ROOT/src:$PYTHONPATH"
+SLVR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$SLVR_ROOT" || exit 1
+export PYTHONPATH="$SLVR_ROOT:$SLVR_ROOT/src:$PYTHONPATH"
 # model configs
 MODEL_NAME="${MODEL_NAME:-Qwen/Qwen2.5-VL-7B-Instruct}"
 export WANDB_PROJECT="SLVR-Qwen25-VL-7B-SFT-STAGE-1-450k-text_new1"
@@ -18,7 +18,7 @@ MAX_PACKED_TOKENS=$((MAX_INSTANCE_PER_BATCH * LST))
 
 
 RANDOM_SEED=42
-DATA_PATH="${DATA_PATH:-$SSLVR_ROOT/meta_viscot.json}"
+DATA_PATH="${DATA_PATH:-$SLVR_ROOT/meta_viscot.json}"
 
 # General training params
 GLOBAL_BATCH_SIZE=64       # global_batch_size becomes irrelevant when use data packing

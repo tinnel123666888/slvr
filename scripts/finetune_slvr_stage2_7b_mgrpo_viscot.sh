@@ -6,9 +6,9 @@
 # ====================================================================
 set -euo pipefail
 
-SSLVR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$SSLVR_ROOT" || exit 1
-export PYTHONPATH="$SSLVR_ROOT:$SSLVR_ROOT/src:$PYTHONPATH"
+SLVR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$SLVR_ROOT" || exit 1
+export PYTHONPATH="$SLVR_ROOT:$SLVR_ROOT/src:$PYTHONPATH"
 
 # ---- Model configs ----
 MODEL_NAME="${MODEL_NAME:-Qwen/Qwen2.5-VL-7B-Instruct}"
