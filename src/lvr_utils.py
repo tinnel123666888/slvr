@@ -225,13 +225,13 @@ class QwenVLBboxTokenMapper:
 #     import json
     
 #     # Test with different image sizes
-#     test_cases = json.load(open("/root/projects/LVR-Finetune/data/sample.json"))
+#     test_cases = json.load(open("/root/projects/SLVR-Finetune/data/sample.json"))
 
     
 #     for idx,case in enumerate(test_cases):
 
 
-#         img_path = os.path.join("/root/projects/LVR-Finetune/images",case['image'])
+#         img_path = os.path.join("/root/projects/SLVR-Finetune/images",case['image'])
 
 #         bboxs = case['bbox']
 #         image = Image.open(img_path)

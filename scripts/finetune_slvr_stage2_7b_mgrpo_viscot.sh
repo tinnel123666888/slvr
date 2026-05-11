@@ -6,15 +6,15 @@
 # ====================================================================
 set -euo pipefail
 
-SLVR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$SLVR_ROOT" || exit 1
-export PYTHONPATH="$SLVR_ROOT:$SLVR_ROOT/src:$PYTHONPATH"
+SSLVR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$SSLVR_ROOT" || exit 1
+export PYTHONPATH="$SSLVR_ROOT:$SSLVR_ROOT/src:$PYTHONPATH"
 
 # ---- Model configs ----
 MODEL_NAME="${MODEL_NAME:-Qwen/Qwen2.5-VL-7B-Instruct}"
 CHKPT_PATH="${CHKPT_PATH:-/path/to/stage1_checkpoint}"
 
-export WANDB_PROJECT="LVR-Qwen25-VL-7B-MGRPO-STAGE2"
+export WANDB_PROJECT="SLVR-Qwen25-VL-7B-MGRPO-STAGE2"
 export WANDB_MODE=offline
 export WANDB_DISABLE_GIT=true
 export MGRPO_DISABLE_LLM_JUDGE=0
@@ -24,6 +24,7 @@ export MGRPO_JUDGE_PORT=8000
 export MGRPO_JUDGE_WORKERS=16
 export MGRPO_JUDGE_TIMEOUT=30
 export MGRPO_JUDGE_IP_REFRESH_INTERVAL=5
+export MGRPO_ACC_Q2_WEIGHT=${MGRPO_ACC_Q2_WEIGHT:-0.3}
 export MGRPO_DISABLE_METRIC_GATHER=1
 export TORCH_NCCL_TRACE_BUFFER_SIZE=200000
 export TORCH_NCCL_DUMP_ON_TIMEOUT=1
@@ -44,9 +45,9 @@ OUTPUT_DIR="${OUTPUT_DIR:-stage2_mgrpo_checkpoints/}"
 FREEZE_VISION=True
 FREEZE_MERGER=True
 DECODING_STRATEGY="latent"
-LVR_STEPS=8
-LVR_END_THRESHOLD=0.02
-LVR_END_CRITERION="mse"
+SLVR_STEPS=8
+SLVR_END_THRESHOLD=0.02
+SLVR_END_CRITERION="mse"
 LATENT_END_TOKEN=True
 LR=5e-6
 TEMP=0.9
@@ -60,8 +61,8 @@ MAX_COMPLETION_LENGTH=512
 MAX_PROMPT_LENGTH=10024
 
 # ---- M-GRPO reward weights ----
-# format_reward now returns [-1.0, 0.0] (malformed gets penalty, valid gets no bonus).
-# Keep format as a constraint (default 0.2) while accuracy remains the primary signal.
+# format_reward now returns [0.0, 1.0] (malformed=0, valid=1).
+# Keep format as an auxiliary signal (default 0.2) while accuracy remains primary.
 LAMBDA_CONSISTENCY=0.3
 LAMBDA_STABILITY=0.1
 REWARD_WEIGHT_ACCURACY=1.0
@@ -80,7 +81,7 @@ BETA=0.04
 MIN_TOKEN=128
 MAX_TOKEN=5120
 
-RUN_NAME="MGRPO_Stage2_7B_decodingBy${DECODING_STRATEGY}_lvr${LVR_STEPS}_LR${LR}_TEMP${TEMP}_lcons${LAMBDA_CONSISTENCY}_lstab${LAMBDA_STABILITY}"
+RUN_NAME="MGRPO_Stage2_7B_decodingBy${DECODING_STRATEGY}_slvr${SLVR_STEPS}_LR${LR}_TEMP${TEMP}_lcons${LAMBDA_CONSISTENCY}_lstab${LAMBDA_STABILITY}"
 
 # ---- Preflight inference (before training) ----
 # Run a small pure-inference sanity check on random training samples.
@@ -98,9 +99,9 @@ if [ "$MGRPO_PREFLIGHT" = "1" ]; then
         --num_samples "$MGRPO_PREFLIGHT_SAMPLES" \
         --max_new_tokens "$MAX_COMPLETION_LENGTH" \
         --decoding_strategy "$DECODING_STRATEGY" \
-        --lvr_steps "$LVR_STEPS" \
-        --criterion "$LVR_END_CRITERION" \
-        --lvr_end_threshold "$LVR_END_THRESHOLD" \
+        --slvr_steps "$SLVR_STEPS" \
+        --criterion "$SLVR_END_CRITERION" \
+        --slvr_end_threshold "$SLVR_END_THRESHOLD" \
         --latent_end_token "$LATENT_END_TOKEN"
 
     PRECHECK_PATH="$OUTPUT_DIR/preflight_inference.json"
@@ -155,9 +156,9 @@ deepspeed src/train/train_mgrpo.py \
     --save_total_limit 10 \
     --dataloader_num_workers 8 \
     --decoding_strategy $DECODING_STRATEGY \
-    --lvr_steps $LVR_STEPS \
-    --criterion $LVR_END_CRITERION \
-    --lvr_end_threshold $LVR_END_THRESHOLD \
+    --slvr_steps $SLVR_STEPS \
+    --criterion $SLVR_END_CRITERION \
+    --slvr_end_threshold $SLVR_END_THRESHOLD \
     --lambda_consistency $LAMBDA_CONSISTENCY \
     --lambda_stability $LAMBDA_STABILITY \
     --lambda_sem $LAMBDA_SEM \

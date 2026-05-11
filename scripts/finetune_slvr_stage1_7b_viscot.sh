@@ -1,12 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-SLVR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$SLVR_ROOT" || exit 1
-export PYTHONPATH="$SLVR_ROOT:$SLVR_ROOT/src:$PYTHONPATH"
+SSLVR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$SSLVR_ROOT" || exit 1
+export PYTHONPATH="$SSLVR_ROOT:$SSLVR_ROOT/src:$PYTHONPATH"
 # model configs
 MODEL_NAME="${MODEL_NAME:-Qwen/Qwen2.5-VL-7B-Instruct}"
-export WANDB_PROJECT="LVR-Qwen25-VL-7B-SFT-STAGE-1-450k-text_new1"
+export WANDB_PROJECT="SLVR-Qwen25-VL-7B-SFT-STAGE-1-450k-text_new1"
 export WANDB_MODE=offline
 export WANDB_DISABLE_GIT=true
 # Data Config
@@ -18,7 +18,7 @@ MAX_PACKED_TOKENS=$((MAX_INSTANCE_PER_BATCH * LST))
 
 
 RANDOM_SEED=42
-DATA_PATH="${DATA_PATH:-$SLVR_ROOT/meta_viscot.json}"
+DATA_PATH="${DATA_PATH:-$SSLVR_ROOT/meta_viscot.json}"
 
 # General training params
 GLOBAL_BATCH_SIZE=64       # global_batch_size becomes irrelevant when use data packing
@@ -29,18 +29,18 @@ GRAD_ACCUM_STEPS=8
 
 # LLM-related params
 LR=1e-5
-LVR_HEAD=False
+SLVR_HEAD=False
 
-# LVR-related params
-LVR_LOSS_FCT=mse
-LAMBDA_LVR=0.1
-LAMBDA_LVR_text=0.1
+# SLVR-related params
+SLVR_LOSS_FCT=mse
+LAMBDA_SLVR=0.1
+LAMBDA_SLVR_text=0.1
 
 MAX_TOKEN=5120
 MIN_TOKEN=128
 
 
-RUN_NAME="text_Stage1_${LVR_LOSS_FCT}LVRLossLambda${LAMBDA_LVR}-MaxVisToken${MAX_TOKEN}-MinVisToken${MIN_TOKEN}"
+RUN_NAME="text_Stage1_${SLVR_LOSS_FCT}SLVRLossLambda${LAMBDA_SLVR}-MaxVisToken${MAX_TOKEN}-MinVisToken${MIN_TOKEN}"
 # ONLINE=True to enable online checkpointing with OCI
 ONLINE=False
 OUTPUT_DIR="${OUTPUT_DIR:-stage1_checkpoints/}"
@@ -50,22 +50,22 @@ OUTPUT_DIR="${OUTPUT_DIR:-stage1_checkpoints/}"
 # --checkpoint_name checkpoint-4000
 
 
-deepspeed src/train/train_lvr.py \
+deepspeed src/train/train_slvr.py \
     --run_name "$RUN_NAME" \
     --coconut True \
-    --loss_lvr_fct $LVR_LOSS_FCT\
+    --loss_slvr_fct $SLVR_LOSS_FCT\
     --deepspeed scripts/zero2_offload.json \
     --model_id $MODEL_NAME \
     --data_path "$DATA_PATH" \
     --remove_unused_columns False \
-    --lvr_head $LVR_HEAD \
-    --lvr_text_head True \
+    --slvr_head $SLVR_HEAD \
+    --slvr_text_head True \
     --freeze_vision_tower True \
     --freeze_merger True \
     --freeze_llm False \
     --learning_rate $LR \
-    --loss_lvr_lambda $LAMBDA_LVR \
-    --loss_lvr_text_lambda $LAMBDA_LVR_text \
+    --loss_slvr_lambda $LAMBDA_SLVR \
+    --loss_slvr_text_lambda $LAMBDA_SLVR_text \
     --bf16 True \
     --fp16 False \
     --disable_flash_attn2 True \

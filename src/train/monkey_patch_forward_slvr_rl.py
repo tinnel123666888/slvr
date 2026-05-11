@@ -32,11 +32,11 @@ def get_rank():
     return dist.get_rank()
 
 
-def replace_qwen2_5_with_mixed_modality_forward_lvr_rl():
+def replace_qwen2_5_with_mixed_modality_forward_slvr_rl():
     verbose = os.getenv("MGRPO_FORWARD_PATCH_VERBOSE", "0") == "1"
     if verbose:
         print("This forward function is seperated from the others as SFT and RL stage have different version of transformers. This will be fixed later.")
-    transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration.forward = qwen2_5_mixed_modality_forward_lvr_grpo
+    transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration.forward = qwen2_5_mixed_modality_forward_slvr_grpo
 
 
 from transformers.modeling_outputs import ModelOutput
@@ -48,8 +48,8 @@ class Qwen2_5_VLCausalLMOutputWithPast(ModelOutput):
     """
 
     loss: Optional[torch.FloatTensor] = None
-    loss_lvr: Optional[torch.FloatTensor] = None
-    loss_lvr_text: Optional[torch.FloatTensor] = None
+    loss_slvr: Optional[torch.FloatTensor] = None
+    loss_slvr_text: Optional[torch.FloatTensor] = None
     loss_ce: Optional[torch.FloatTensor] = None
     loss_mode_switch: Optional[torch.FloatTensor] = None
     logits: Optional[torch.FloatTensor] = None
@@ -59,28 +59,28 @@ class Qwen2_5_VLCausalLMOutputWithPast(ModelOutput):
     rope_deltas: Optional[torch.LongTensor] = None
     
     last_position_hidden_state: Optional[Tuple[torch.FloatTensor]] = None
-    # next_pos_lvr:Optional[bool] = False
+    # next_pos_slvr:Optional[bool] = False
 
 
-def  set_lvr_loss_fct(loss_lvr_fct: str):
+def  set_slvr_loss_fct(loss_slvr_fct: str):
     """
-        Set the loss function for LVR.
+        Set the loss function for SLVR.
         Args:
-            loss_lvr_fct (str): The type of loss function to use for LVR.
+            loss_slvr_fct (str): The type of loss function to use for SLVR.
         Returns:
             A loss function object.
     """
-    if loss_lvr_fct == 'mse':
+    if loss_slvr_fct == 'mse':
         return MSELoss()
-    elif loss_lvr_fct == 'mae':
+    elif loss_slvr_fct == 'mae':
         return L1Loss()
-    elif loss_lvr_fct == 'cosine':
+    elif loss_slvr_fct == 'cosine':
         # Returns a loss function: 1 - cosine similarity
         def cosine_loss(x, y):
             return 1 - F.cosine_similarity(x, y, dim=-1).mean()
         return cosine_loss
     else:
-        raise ValueError(f"Unsupported lvr_loss: {loss_lvr_fct}")
+        raise ValueError(f"Unsupported slvr_loss: {loss_slvr_fct}")
 
 
 """
@@ -88,7 +88,7 @@ def  set_lvr_loss_fct(loss_lvr_fct: str):
     Kinda messy since in this stage, the transofmers will be 4.51.3 < 4.54 in stage I
     Will fix this inconsistency in final release
 """
-def qwen2_5_mixed_modality_forward_lvr_grpo(
+def qwen2_5_mixed_modality_forward_slvr_grpo(
     self,
     input_ids: torch.LongTensor = None,
     attention_mask: Optional[torch.Tensor] = None,
@@ -107,15 +107,15 @@ def qwen2_5_mixed_modality_forward_lvr_grpo(
     rope_deltas: Optional[torch.LongTensor] = None,
     cache_position: Optional[torch.LongTensor] = None,
     second_per_grid_ts: Optional[torch.Tensor] = None,
-    lvr_mode_switch: Optional[torch.Tensor] = None, # This is for GENERATION: Which instance in the batch is in lvr mode
+    slvr_mode_switch: Optional[torch.Tensor] = None, # This is for GENERATION: Which instance in the batch is in slvr mode
     last_position_hidden_state: Optional[torch.FloatTensor] = None, # This is for GENERATION: last hidden state of the last position
-    lvr_mask: Optional[torch.FloatTensor] = None,   # This is for RL loss computation
-    lvr_states: Optional[torch.FloatTensor] = None, # This is for RL loss computation
+    slvr_mask: Optional[torch.FloatTensor] = None,   # This is for RL loss computation
+    slvr_states: Optional[torch.FloatTensor] = None, # This is for RL loss computation
     prompt_length: Optional[int] = None, # This is for RL loss computation
     text_embedding: Optional[torch.FloatTensor] = None,  # 新增：text embedding参数
     **kwargs: Unpack[TransformersKwargs],
 ) -> Union[Tuple, Qwen2_5_VLCausalLMOutputWithPast]:
-    '''In this mode, no lvr_tokens'''
+    '''In this mode, no slvr_tokens'''
     output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
     output_hidden_states = (
         output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -129,22 +129,22 @@ def qwen2_5_mixed_modality_forward_lvr_grpo(
         Generation: inputs_embeds in shape (bs, seq_len, hidden)
     '''
     if last_position_hidden_state is not None:
-        inputs_embeds[lvr_mode_switch,-1,:] = last_position_hidden_state[lvr_mode_switch]
+        inputs_embeds[slvr_mode_switch,-1,:] = last_position_hidden_state[slvr_mode_switch]
 
     ''' 
-        Teacher-forcing fwd pass: patch lvr states
+        Teacher-forcing fwd pass: patch slvr states
     '''
-    if lvr_states is not None and lvr_mask is not None:
+    if slvr_states is not None and slvr_mask is not None:
         comp_embeds = inputs_embeds[:, prompt_length:, :]  # (B, C, H)
         comp_embeds = torch.where(
-            lvr_mask.unsqueeze(-1),   # (B, C, 1)
-            lvr_states,               # (B, C, H)
+            slvr_mask.unsqueeze(-1),   # (B, C, 1)
+            slvr_states,               # (B, C, H)
             comp_embeds               # (B, C, H)
         )
         inputs_embeds = torch.cat([inputs_embeds[:, :prompt_length, :], comp_embeds], dim=1)
     # Pass dummy image and dummy grid to the visual model to avoid deepspeed
     # edge cases when a batch has text-only inputs during training.
-    if lvr_mode_switch is None and (pixel_values is None and pixel_values_videos is None):
+    if slvr_mode_switch is None and (pixel_values is None and pixel_values_videos is None):
         dummy_pixel = torch.zeros(784, 1176).to(self.model.visual.device)
         dummy_grid = torch.tensor([[1, 28, 28]]).to(self.model.visual.device)
 
@@ -183,12 +183,12 @@ def qwen2_5_mixed_modality_forward_lvr_grpo(
     
     # 处理text_embedding
     projected_text_embeddings = None
-    if text_embedding is not None and hasattr(self.config, 'lvr_text_id'):
+    if text_embedding is not None and hasattr(self.config, 'slvr_text_id'):
         # 1. 识别<|sem|> token的位置
-        lvr_text_mask = input_ids == self.config.lvr_text_id
-        batch_indices_text, seq_positions_text = torch.nonzero(lvr_text_mask, as_tuple=True)
+        slvr_text_mask = input_ids == self.config.slvr_text_id
+        batch_indices_text, seq_positions_text = torch.nonzero(slvr_text_mask, as_tuple=True)
         
-        if lvr_text_mask.any():
+        if slvr_text_mask.any():
             batch_size = input_ids.size(0)
             
             # 根据text_embedding的形状进行处理
@@ -282,11 +282,11 @@ def qwen2_5_mixed_modality_forward_lvr_grpo(
         **kwargs,
     )
 
-    # check if there is lvr_head
-    if self.config.lvr_head:
-        '''apply lvr_head in _inference mode'''
-        if lvr_mode_switch is not None:
-            outputs.last_hidden_state[lvr_mode_switch,:,:] = self.lvr_head(outputs.last_hidden_state[lvr_mode_switch,:,:])
+    # check if there is slvr_head
+    if self.config.slvr_head:
+        '''apply slvr_head in _inference mode'''
+        if slvr_mode_switch is not None:
+            outputs.last_hidden_state[slvr_mode_switch,:,:] = self.slvr_head(outputs.last_hidden_state[slvr_mode_switch,:,:])
 
     hidden_states = outputs[0]
     last_position_hidden_state = outputs.last_hidden_state[:,-1,:]
@@ -301,9 +301,9 @@ def qwen2_5_mixed_modality_forward_lvr_grpo(
     # full backward graph so that parameter gradients (all zeros) are
     # computed and hooks fire.
     # ------------------------------------------------------------------
-    if self.config.lvr_head and lvr_mode_switch is None:
-        _lvr_d = self.lvr_head(hidden_states[:1, :1, :].detach()).sum()
-        logits = logits + (_lvr_d - _lvr_d.detach())
+    if self.config.slvr_head and slvr_mode_switch is None:
+        _slvr_d = self.slvr_head(hidden_states[:1, :1, :].detach()).sum()
+        logits = logits + (_slvr_d - _slvr_d.detach())
     if text_embedding is None and hasattr(self, 'text_embedding_projector'):
         _te_inp = torch.zeros(1, self.text_embedding_projector.in_features if hasattr(self.text_embedding_projector, 'in_features') else 4096,
                               device=logits.device, dtype=logits.dtype)
@@ -311,12 +311,12 @@ def qwen2_5_mixed_modality_forward_lvr_grpo(
         logits = logits + (_te_d - _te_d.detach())
 
     # 设置损失函数
-    lvr_loss_fct = set_lvr_loss_fct(self.config.loss_lvr_fct)
-    lvr_text_loss_fct = set_lvr_loss_fct(self.config.loss_lvr_fct)
+    slvr_loss_fct = set_slvr_loss_fct(self.config.loss_slvr_fct)
+    slvr_text_loss_fct = set_slvr_loss_fct(self.config.loss_slvr_fct)
     loss = None
     loss_ce = None
-    loss_lvr = None
-    loss_lvr_text = None  # 新增：text embedding损失
+    loss_slvr = None
+    loss_slvr_text = None  # 新增：text embedding损失
     
     if labels is not None:
         # Upcast to float if we need to compute the loss to avoid potential precision issues
@@ -328,24 +328,24 @@ def qwen2_5_mixed_modality_forward_lvr_grpo(
         loss_fct = CrossEntropyLoss()
         shift_logits = shift_logits.view(-1, self.config.vocab_size)
         shift_labels = shift_labels.view(-1)
-        # Don't want CE loss for <lvr> token 和 <sem_placeholder> token
-        shift_labels = shift_labels.masked_fill(shift_labels == self.config.lvr_id, IGNORE_INDEX)
-        shift_labels = shift_labels.masked_fill(shift_labels == self.config.lvr_text_id, IGNORE_INDEX)
+        # Don't want CE loss for <slvr> token 和 <sem_placeholder> token
+        shift_labels = shift_labels.masked_fill(shift_labels == self.config.slvr_id, IGNORE_INDEX)
+        shift_labels = shift_labels.masked_fill(shift_labels == self.config.slvr_text_id, IGNORE_INDEX)
 
         # Enable model parallelism
         shift_labels = shift_labels.to(shift_logits.device)
         loss_ce = loss_fct(shift_logits, shift_labels)
 
-        # No lvr loss in this mode (除非有lvr_states)
-        loss_lvr = None
+        # No slvr loss in this mode (除非有slvr_states)
+        loss_slvr = None
         
         # 计算sem损失
-        if text_embedding is not None and hasattr(self.config, 'lvr_text_id') and projected_text_embeddings is not None:
+        if text_embedding is not None and hasattr(self.config, 'slvr_text_id') and projected_text_embeddings is not None:
             # 重新识别<|sem|>的位置
-            lvr_text_mask = input_ids == self.config.lvr_text_id
-            batch_indices_text, seq_positions_text = torch.nonzero(lvr_text_mask, as_tuple=True)
+            slvr_text_mask = input_ids == self.config.slvr_text_id
+            batch_indices_text, seq_positions_text = torch.nonzero(slvr_text_mask, as_tuple=True)
             
-            if lvr_text_mask.any():
+            if slvr_text_mask.any():
                 # 获取<sem>位置（<|sem|>的前一个位置）
                 seq_positions_text_start = seq_positions_text - 1
                 
@@ -356,7 +356,7 @@ def qwen2_5_mixed_modality_forward_lvr_grpo(
                 # 需要根据batch_indices_text选择对应的嵌入
                 target_text_embeddings = projected_text_embeddings[batch_indices_text].to(torch.float32)
                 
-                loss_lvr_text = lvr_text_loss_fct(selected_hidden_states_text, target_text_embeddings)
+                loss_slvr_text = slvr_text_loss_fct(selected_hidden_states_text, target_text_embeddings)
 
     if not return_dict:
         output = (logits,) + outputs[1:]
@@ -364,8 +364,8 @@ def qwen2_5_mixed_modality_forward_lvr_grpo(
 
     return Qwen2_5_VLCausalLMOutputWithPast(
         loss_ce=loss_ce,
-        loss_lvr=loss_lvr,
-        loss_lvr_text=loss_lvr_text,  # 新增：返回text embedding损失
+        loss_slvr=loss_slvr,
+        loss_slvr_text=loss_slvr_text,  # 新增：返回text embedding损失
         logits=logits,
         past_key_values=outputs.past_key_values,
         hidden_states=outputs.hidden_states,

@@ -9,8 +9,8 @@ import torch
 from transformers import AutoConfig, AutoProcessor, GenerationConfig
 
 from qwen_vl_utils import process_vision_info
-from src.model.qwen_lvr_model import QwenWithLVR
-from src.train.monkey_patch_forward_lvr import replace_qwen2_5_with_mixed_modality_forward_lvr
+from src.model.qwen_slvr_model import QwenWithSLVR
+from src.train.monkey_patch_forward_slvr import replace_qwen2_5_with_mixed_modality_forward_slvr
 
 
 def str2bool(x: str) -> bool:
@@ -21,17 +21,17 @@ def replace_image_tokens(text: str) -> str:
     return re.sub(r"\n?" + re.escape("<image>") + r"\n?", "", text).strip()
 
 
-def ensure_lvr_tokens_and_ids(model, processor):
+def ensure_slvr_tokens_and_ids(model, processor):
     tokenizer = processor.tokenizer
     token_pairs = [
-        ("lvr_start_id", "<|vision_start|>"),
-        ("lvr_id", "<|lvr|>"),
-        ("lvr_latent_end_id", "<|lvr_latent_end|>"),
-        ("lvr_end_id", "<|vision_end|>"),
-        ("lvr_text_start_id", "<sem>"),
-        ("lvr_text_id", "<|sem|>"),
-        ("lvr_text_latent_end_id", "<|sem_latent_end|>"),
-        ("lvr_text_end_id", "</sem>"),
+        ("slvr_start_id", "<|vision_start|>"),
+        ("slvr_id", "<|slvr|>"),
+        ("slvr_latent_end_id", "<|slvr_latent_end|>"),
+        ("slvr_end_id", "<|vision_end|>"),
+        ("slvr_text_start_id", "<sem>"),
+        ("slvr_text_id", "<|sem|>"),
+        ("slvr_text_latent_end_id", "<|sem_latent_end|>"),
+        ("slvr_text_end_id", "</sem>"),
     ]
 
     added = 0
@@ -84,9 +84,9 @@ def main():
     parser.add_argument("--num_samples", type=int, default=5)
     parser.add_argument("--max_new_tokens", type=int, default=256)
     parser.add_argument("--decoding_strategy", default="latent")
-    parser.add_argument("--lvr_steps", type=int, default=8)
+    parser.add_argument("--slvr_steps", type=int, default=8)
     parser.add_argument("--criterion", default="mse")
-    parser.add_argument("--lvr_end_threshold", type=float, default=0.02)
+    parser.add_argument("--slvr_end_threshold", type=float, default=0.02)
     parser.add_argument("--latent_end_token", default="true")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -98,12 +98,12 @@ def main():
     if str2bool(args.latent_end_token):
         config.latent_end_token = True
 
-    replace_qwen2_5_with_mixed_modality_forward_lvr(
+    replace_qwen2_5_with_mixed_modality_forward_slvr(
         inference_mode=True,
-        lvr_head=bool(getattr(config, "lvr_head", False)),
+        slvr_head=bool(getattr(config, "slvr_head", False)),
     )
 
-    model = QwenWithLVR.from_pretrained(
+    model = QwenWithSLVR.from_pretrained(
         args.model_pth,
         config=config,
         torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
@@ -114,7 +114,7 @@ def main():
 
     processor = AutoProcessor.from_pretrained(args.model_pth, trust_remote_code=True)
     processor.tokenizer.padding_side = "left"
-    added = ensure_lvr_tokens_and_ids(model, processor)
+    added = ensure_slvr_tokens_and_ids(model, processor)
 
     pairs = load_pairs(args.data_path)
     chosen = random.sample(range(len(pairs)), min(args.num_samples, len(pairs)))
@@ -170,9 +170,9 @@ def main():
         pad_token_id=processor.tokenizer.pad_token_id,
         eos_token_id=processor.tokenizer.eos_token_id,
         decoding_strategy=args.decoding_strategy,
-        lvr_steps=args.lvr_steps,
+        slvr_steps=args.slvr_steps,
         criterion=args.criterion,
-        lvr_end_threshold=args.lvr_end_threshold,
+        slvr_end_threshold=args.slvr_end_threshold,
     )
 
     with torch.no_grad():
@@ -200,15 +200,15 @@ def main():
     payload = {
         "model_pth": args.model_pth,
         "config": {
-            "lvr_head": getattr(config, "lvr_head", None),
+            "slvr_head": getattr(config, "slvr_head", None),
             "latent_end_token": getattr(config, "latent_end_token", None),
             "added_special_tokens": added,
         },
         "generation": {
             "decoding_strategy": args.decoding_strategy,
-            "lvr_steps": args.lvr_steps,
+            "slvr_steps": args.slvr_steps,
             "criterion": args.criterion,
-            "lvr_end_threshold": args.lvr_end_threshold,
+            "slvr_end_threshold": args.slvr_end_threshold,
             "do_sample": False,
         },
         "num_records": len(records),

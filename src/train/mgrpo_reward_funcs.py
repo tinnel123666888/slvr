@@ -318,10 +318,10 @@ def accuracy_reward(completions, assistant, prompts=None, **kwargs):
 
 def format_reward(completions, **kwargs):
     """
-    Check that each answer strictly follows the LVR output format in order:
+    Check that each answer strictly follows the SLVR output format in order:
       1) Output starts with <|vision_start|>  (leading whitespace is stripped)
          Bypass (missing <|vision_start|>) is penalised: contributes -1.0 per sub-answer.
-      2) At least MIN_LVR_LATENT_STEPS <|vision_end|> tokens must appear between
+      2) At least MIN_SLVR_LATENT_STEPS <|vision_end|> tokens must appear between
          <|vision_start|> and <sem> (the visual latent placeholders).
       3) <sem> appears within N<=10 tokens after <|vision_start|>
          Tokens are counted by splitting on any special token (<|vision_end|>, spaces, etc.):
@@ -336,14 +336,14 @@ def format_reward(completions, **kwargs):
 
         Returns sum over both sub-answers: range [-1.0, 0.0].
     """
-    LVR_START = "<|vision_start|>"
-    LVR_TEXT_START = "<sem>"
-    LVR_END = "<|vision_end|>"
+    SLVR_START = "<|vision_start|>"
+    SLVR_TEXT_START = "<sem>"
+    SLVR_END = "<|vision_end|>"
     ANSWER_START = "<answer>"
     ANSWER_END = "</answer>"
-    MAX_LVR_STEPS = 10
+    MAX_SLVR_STEPS = 10
     MAX_ANSWER_GAP = 3
-    MIN_LVR_LATENT_STEPS = 2   # require at least 2 <|vision_end|> latent tokens in visual span
+    MIN_SLVR_LATENT_STEPS = 2   # require at least 2 <|vision_end|> latent tokens in visual span
 
     def _count_tokens_in_segment(segment: str) -> int:
         """Count tokens in a text segment between special markers.
@@ -351,34 +351,34 @@ def format_reward(completions, **kwargs):
         Split by <|vision_end|>: each separator is 1 token, each non-empty
         text piece (stripped) between separators is 1 token.
         """
-        parts = segment.split(LVR_END)
-        lvr_end_count = len(parts) - 1
+        parts = segment.split(SLVR_END)
+        slvr_end_count = len(parts) - 1
         non_end_tokens = sum(1 for p in parts if p.strip())
-        return lvr_end_count + non_end_tokens
+        return slvr_end_count + non_end_tokens
 
     def check_format(text):
         """Return 0.0 (valid) or -0.5 (malformed)."""
         text = text.lstrip()
 
         # Must start with <|vision_start|>
-        if not text.startswith(LVR_START):
+        if not text.startswith(SLVR_START):
             return -0.5
 
-        after_start = text[len(LVR_START):]
+        after_start = text[len(SLVR_START):]
 
-        # <sem> must appear, and gap must be <=MAX_LVR_STEPS tokens
-        ts_idx = after_start.find(LVR_TEXT_START)
+        # <sem> must appear, and gap must be <=MAX_SLVR_STEPS tokens
+        ts_idx = after_start.find(SLVR_TEXT_START)
         if ts_idx == -1:
             return -0.5
         between_start_ts = after_start[:ts_idx]
-        if _count_tokens_in_segment(between_start_ts) > MAX_LVR_STEPS:
+        if _count_tokens_in_segment(between_start_ts) > MAX_SLVR_STEPS:
             return -0.5
 
-        # Require at least MIN_LVR_LATENT_STEPS <|vision_end|> in visual span
-        if between_start_ts.count(LVR_END) < MIN_LVR_LATENT_STEPS:
+        # Require at least MIN_SLVR_LATENT_STEPS <|vision_end|> in visual span
+        if between_start_ts.count(SLVR_END) < MIN_SLVR_LATENT_STEPS:
             return -0.5
 
-        after_ts = after_start[ts_idx + len(LVR_TEXT_START):]
+        after_ts = after_start[ts_idx + len(SLVR_TEXT_START):]
 
         # <answer> must appear after <sem>, gap must be 1-3 tokens
         ans_idx = after_ts.find(ANSWER_START)

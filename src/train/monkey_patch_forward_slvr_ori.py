@@ -31,40 +31,40 @@ def get_rank():
     return dist.get_rank()
 
 
-def replace_qwen2_5_with_mixed_modality_forward_lvr(inference_mode=False,
+def replace_qwen2_5_with_mixed_modality_forward_slvr(inference_mode=False,
                                                     coconut=True,
-                                                    lvr_head=True,
+                                                    slvr_head=True,
                                                     mode_switch_loss=False,
                                                     latent_end_token=False,
                                                     rl = False):
     
     print("#"*42)
     if inference_mode:
-        if lvr_head:
+        if slvr_head:
             print("Inference mode with Lvr_head!!!")
-            transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration.forward = qwen2_5_mixed_modality_forward_lvr_with_head_inference
+            transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration.forward = qwen2_5_mixed_modality_forward_slvr_with_head_inference
         else:
             print("Inference mode without Lvr_head!!!")
-            transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration.forward = qwen2_5_mixed_modality_forward_lvr_inference
+            transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration.forward = qwen2_5_mixed_modality_forward_slvr_inference
     elif rl:
         print("Activated stage 2 training!!!")
-        transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration.forward = qwen2_5_mixed_modality_forward_lvr_grpo
+        transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration.forward = qwen2_5_mixed_modality_forward_slvr_grpo
     else:
-        if latent_end_token and lvr_head:
-            print("Activated latent end token mode with LVR_Head!!!")
-            transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration.forward = qwen2_5_mixed_modality_forward_lvr_with_head_with_latentEndToken
-        elif latent_end_token and not lvr_head:
-            print("Activated latent end token mode without LVR_Head!!!")
-            transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration.forward = qwen2_5_mixed_modality_forward_lvr_with_latentEndToken
+        if latent_end_token and slvr_head:
+            print("Activated latent end token mode with SLVR_Head!!!")
+            transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration.forward = qwen2_5_mixed_modality_forward_slvr_with_head_with_latentEndToken
+        elif latent_end_token and not slvr_head:
+            print("Activated latent end token mode without SLVR_Head!!!")
+            transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration.forward = qwen2_5_mixed_modality_forward_slvr_with_latentEndToken
         elif mode_switch_loss:
             print("Activated BCE mode swtich loss!!!")
-            transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration.forward = qwen2_5_mixed_modality_forward_lvr_with_head_with_modeSwitchLoss
-        elif lvr_head:
-            print("Activated naive LVR with head mode!!!")
-            transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration.forward = qwen2_5_mixed_modality_forward_lvr_with_head
+            transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration.forward = qwen2_5_mixed_modality_forward_slvr_with_head_with_modeSwitchLoss
+        elif slvr_head:
+            print("Activated naive SLVR with head mode!!!")
+            transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration.forward = qwen2_5_mixed_modality_forward_slvr_with_head
         else:
-            print("Activated naive LVR without head mode!!!")
-            transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration.forward = qwen2_5_mixed_modality_forward_lvr
+            print("Activated naive SLVR without head mode!!!")
+            transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration.forward = qwen2_5_mixed_modality_forward_slvr
     
     print("#"*42)
 
@@ -78,7 +78,7 @@ class Qwen2_5_VLCausalLMOutputWithPast(ModelOutput):
     """
 
     loss: Optional[torch.FloatTensor] = None
-    loss_lvr: Optional[torch.FloatTensor] = None
+    loss_slvr: Optional[torch.FloatTensor] = None
     loss_ce: Optional[torch.FloatTensor] = None
     loss_mode_switch: Optional[torch.FloatTensor] = None
     logits: Optional[torch.FloatTensor] = None
@@ -88,34 +88,34 @@ class Qwen2_5_VLCausalLMOutputWithPast(ModelOutput):
     rope_deltas: Optional[torch.LongTensor] = None
     
     last_position_hidden_state: Optional[Tuple[torch.FloatTensor]] = None
-    # next_pos_lvr:Optional[bool] = False
+    # next_pos_slvr:Optional[bool] = False
 
 
-def  set_lvr_loss_fct(loss_lvr_fct: str):
+def  set_slvr_loss_fct(loss_slvr_fct: str):
     """
-        Set the loss function for LVR.
+        Set the loss function for SLVR.
         Args:
-            loss_lvr_fct (str): The type of loss function to use for LVR.
+            loss_slvr_fct (str): The type of loss function to use for SLVR.
         Returns:
             A loss function object.
     """
-    if loss_lvr_fct == 'mse':
+    if loss_slvr_fct == 'mse':
         return MSELoss()
-    elif loss_lvr_fct == 'mae':
+    elif loss_slvr_fct == 'mae':
         return L1Loss()
-    elif loss_lvr_fct == 'cosine':
+    elif loss_slvr_fct == 'cosine':
         # Returns a loss function: 1 - cosine similarity
         def cosine_loss(x, y):
             return 1 - F.cosine_similarity(x, y, dim=-1).mean()
         return cosine_loss
     else:
-        raise ValueError(f"Unsupported lvr_loss: {loss_lvr_fct}")
+        raise ValueError(f"Unsupported slvr_loss: {loss_slvr_fct}")
 
 '''
     Coconut mode
-    No LVR Head
+    No SLVR Head
 '''
-def qwen2_5_mixed_modality_forward_lvr(
+def qwen2_5_mixed_modality_forward_slvr(
     self,
     input_ids: torch.LongTensor = None,
     attention_mask: Optional[torch.Tensor] = None,
@@ -134,9 +134,9 @@ def qwen2_5_mixed_modality_forward_lvr(
     rope_deltas: Optional[torch.LongTensor] = None,
     cache_position: Optional[torch.LongTensor] = None,
     second_per_grid_ts: Optional[torch.Tensor] = None,
-    lvr_tokens: Optional[torch.Tensor] = None,      # This is for TRAINING: Where should the lvr img tokens be
-    lvr_tokens_thw: Optional[List[torch.Tensor]] = None,      # This is for TRAINING: Where should the lvr img tokens be
-    lvr_mode_switch: Optional[torch.Tensor] = None, # This is for INFERENCE: Which instance in the batch is in lvr mode
+    slvr_tokens: Optional[torch.Tensor] = None,      # This is for TRAINING: Where should the slvr img tokens be
+    slvr_tokens_thw: Optional[List[torch.Tensor]] = None,      # This is for TRAINING: Where should the slvr img tokens be
+    slvr_mode_switch: Optional[torch.Tensor] = None, # This is for INFERENCE: Which instance in the batch is in slvr mode
     last_position_hidden_state: Optional[torch.FloatTensor] = None, # This is for INFERENCE: last hidden state of the last position
 ) -> Union[Tuple, Qwen2_5_VLCausalLMOutputWithPast]:
     
@@ -149,10 +149,10 @@ def qwen2_5_mixed_modality_forward_lvr(
     if inputs_embeds is None:
         inputs_embeds = self.model.get_input_embeddings()(input_ids)
 
-    if lvr_mode_switch:
+    if slvr_mode_switch:
         # only happen during inference
         # in fact, each instance's seq_len will be 1 in inference
-        inputs_embeds[lvr_mode_switch,-1,:] = last_position_hidden_state[lvr_mode_switch]
+        inputs_embeds[slvr_mode_switch,-1,:] = last_position_hidden_state[slvr_mode_switch]
 
     ''' 
         only happen during inference 
@@ -160,11 +160,11 @@ def qwen2_5_mixed_modality_forward_lvr(
     '''
     if last_position_hidden_state is not None:
         # in fact, each instance's seq_len will be 1 in inference
-        inputs_embeds[lvr_mode_switch,-1,:] = last_position_hidden_state[lvr_mode_switch]
+        inputs_embeds[slvr_mode_switch,-1,:] = last_position_hidden_state[slvr_mode_switch]
 
     '''Only necessary in training'''
     # Pass dummy image and dummy grid to the visual model to avoid deepspeed error.
-    if not lvr_mode_switch and (pixel_values is None and pixel_values_videos is None):
+    if not slvr_mode_switch and (pixel_values is None and pixel_values_videos is None):
         # Create dummy pixel_values and grid_thw for avoiding deepspeed error.
         dummy_pixel = torch.zeros(784, 1176).to(self.model.visual.device)
         dummy_grid = torch.tensor([[1, 28, 28]]).to(self.model.visual.device)
@@ -207,47 +207,47 @@ def qwen2_5_mixed_modality_forward_lvr(
         image_embeds = image_embeds.to(inputs_embeds.device, inputs_embeds.dtype)
         inputs_embeds = inputs_embeds.masked_scatter(image_mask_unsqueeze, image_embeds)
 
-        # IN TRAINING should we fill the lvr token positions with selected img tokrnd
-        if lvr_tokens is not None:
+        # IN TRAINING should we fill the slvr token positions with selected img tokrnd
+        if slvr_tokens is not None:
             '''
-                Filling the lvr tokens with image embeddings.
+                Filling the slvr tokens with image embeddings.
                 Applicable when each image input has multiple bboxes
             '''
             total_tokens = torch.sum(image_mask, dim=1)   # 1d tensor([216, 234, 234, 234]) for #vis_tokens in each instance in batch
             batch_size = input_ids.size(0) 
-            # lvr mask for lvr token locations in the batch, [bs, seq_length]
-            # in each instance, lvr tokens are True, others are False
-            lvr_mask = input_ids == self.config.lvr_id  
-            # Total length = number of <lvr> tokens in the batch
-            # seq_positions: flattend LOCAL positions of lvr tokens in the inputs_ids
-            batch_indices, seq_positions = torch.nonzero(lvr_mask, as_tuple=True)  
+            # slvr mask for slvr token locations in the batch, [bs, seq_length]
+            # in each instance, slvr tokens are True, others are False
+            slvr_mask = input_ids == self.config.slvr_id  
+            # Total length = number of <slvr> tokens in the batch
+            # seq_positions: flattend LOCAL positions of slvr tokens in the inputs_ids
+            batch_indices, seq_positions = torch.nonzero(slvr_mask, as_tuple=True)  
 
-            if isinstance(lvr_tokens,list):
+            if isinstance(slvr_tokens,list):
                 '''Exrtacting tokens from original image'''
                 #  GLOBAL starting index in `image_embeds` of each image in the batch
                 image_token_offsets = torch.cumsum(
                     F.pad(total_tokens, (1, 0)), dim=0
                 )[:-1]  # shape [B], offset into image_embeds for each batch element
 
-                global_lvr_token_indices = []
+                global_slvr_token_indices = []
 
-                for b, lvr_ids in enumerate(lvr_tokens):
+                for b, slvr_ids in enumerate(slvr_tokens):
                     # Convert local to global index
                     offset = image_token_offsets[b].item()
-                    global_lvr_token_indices.append(lvr_ids + offset)
-                global_lvr_token_indices = torch.cat(global_lvr_token_indices, dim=0)  # [L_total]
+                    global_slvr_token_indices.append(slvr_ids + offset)
+                global_slvr_token_indices = torch.cat(global_slvr_token_indices, dim=0)  # [L_total]
 
                 # Step 3: Gather the selected visual embeddings
-                selected_lvr_embeds = image_embeds[global_lvr_token_indices]  # [L_total, H]
+                selected_slvr_embeds = image_embeds[global_slvr_token_indices]  # [L_total, H]
 
                 # Step 4: Replace in input_embeds at the right batch and position
-                inputs_embeds[batch_indices, seq_positions] = selected_lvr_embeds
+                inputs_embeds[batch_indices, seq_positions] = selected_slvr_embeds
             else:
                 '''re-encode target area'''
-                # Now lvr_tokens is pixel_values of the cropped targets
-                selected_lvr_embeds = self.model.get_image_features(lvr_tokens, lvr_tokens_thw)
-                selected_lvr_embeds = torch.cat(selected_lvr_embeds, dim=0)
-                inputs_embeds[batch_indices, seq_positions] = selected_lvr_embeds
+                # Now slvr_tokens is pixel_values of the cropped targets
+                selected_slvr_embeds = self.model.get_image_features(slvr_tokens, slvr_tokens_thw)
+                selected_slvr_embeds = torch.cat(selected_slvr_embeds, dim=0)
+                inputs_embeds[batch_indices, seq_positions] = selected_slvr_embeds
 
     if attention_mask is not None:
         attention_mask = attention_mask.to(inputs_embeds.device)
@@ -302,11 +302,11 @@ def qwen2_5_mixed_modality_forward_lvr(
     last_position_hidden_state = outputs.last_hidden_state[:,-1,:]
     logits = self.lm_head(hidden_states)
 
-    lvr_loss_fct = set_lvr_loss_fct(self.config.loss_lvr_fct)
+    slvr_loss_fct = set_slvr_loss_fct(self.config.loss_slvr_fct)
 
     loss = None
     loss_ce = None
-    loss_lvr = None
+    loss_slvr = None
     if labels is not None:
         # Upcast to float if we need to compute the loss to avoid potential precision issues
         logits = logits.float()
@@ -317,21 +317,21 @@ def qwen2_5_mixed_modality_forward_lvr(
         loss_fct = CrossEntropyLoss()
         shift_logits = shift_logits.view(-1, self.config.vocab_size)
         shift_labels = shift_labels.view(-1)
-        # Don't want CE loss for <lvr> token
-        shift_labels = shift_labels.masked_fill(shift_labels == self.config.lvr_id, IGNORE_INDEX)
+        # Don't want CE loss for <slvr> token
+        shift_labels = shift_labels.masked_fill(shift_labels == self.config.slvr_id, IGNORE_INDEX)
 
         # Enable model parallelism
         shift_labels = shift_labels.to(shift_logits.device)
         loss_ce = loss_fct(shift_logits, shift_labels)
 
-        # lvr loss
-        # Get last hidden states for <lvr> token positions
+        # slvr loss
+        # Get last hidden states for <slvr> token positions
         seq_positions_start = seq_positions - 1  # Now points to vision_start
         ''' We need to convert to fp32 to avoid overflow by mse'''
         selected_hidden_states = hidden_states[batch_indices, seq_positions_start].to(torch.float32)  # [L_total, H]
-        selected_lvr_embeds = selected_lvr_embeds.to(torch.float32)
-        # Compute LVR loss between predicted and inserted lvr embeddings
-        loss_lvr = lvr_loss_fct(selected_hidden_states, selected_lvr_embeds)
+        selected_slvr_embeds = selected_slvr_embeds.to(torch.float32)
+        # Compute SLVR loss between predicted and inserted slvr embeddings
+        loss_slvr = slvr_loss_fct(selected_hidden_states, selected_slvr_embeds)
 
     if not return_dict:
         output = (logits,) + outputs[1:]
@@ -340,7 +340,7 @@ def qwen2_5_mixed_modality_forward_lvr(
     return Qwen2_5_VLCausalLMOutputWithPast(
         # loss=loss,
         loss_ce=loss_ce,
-        loss_lvr=loss_lvr,
+        loss_slvr=loss_slvr,
         logits=logits,
         past_key_values=outputs.past_key_values,
         hidden_states=outputs.hidden_states,
@@ -352,9 +352,9 @@ def qwen2_5_mixed_modality_forward_lvr(
 
 '''
     Coconut mode
-    No LVR Head
+    No SLVR Head
 '''
-def qwen2_5_mixed_modality_forward_lvr_inference(
+def qwen2_5_mixed_modality_forward_slvr_inference(
     self,
     input_ids: torch.LongTensor = None,
     attention_mask: Optional[torch.Tensor] = None,
@@ -373,9 +373,9 @@ def qwen2_5_mixed_modality_forward_lvr_inference(
     rope_deltas: Optional[torch.LongTensor] = None,
     cache_position: Optional[torch.LongTensor] = None,
     second_per_grid_ts: Optional[torch.Tensor] = None,
-    lvr_tokens: Optional[torch.Tensor] = None,      # This is for TRAINING: Where should the lvr img tokens be
-    lvr_tokens_thw: Optional[List[torch.Tensor]] = None,      # This is for TRAINING: Where should the lvr img tokens be
-    lvr_mode_switch: Optional[torch.Tensor] = None, # This is for INFERENCE: Which instance in the batch is in lvr mode
+    slvr_tokens: Optional[torch.Tensor] = None,      # This is for TRAINING: Where should the slvr img tokens be
+    slvr_tokens_thw: Optional[List[torch.Tensor]] = None,      # This is for TRAINING: Where should the slvr img tokens be
+    slvr_mode_switch: Optional[torch.Tensor] = None, # This is for INFERENCE: Which instance in the batch is in slvr mode
     last_position_hidden_state: Optional[torch.FloatTensor] = None, # This is for INFERENCE: last hidden state of the last position
     **kwargs: Unpack[TransformersKwargs],
 ) -> Union[Tuple, Qwen2_5_VLCausalLMOutputWithPast]:
@@ -392,7 +392,7 @@ def qwen2_5_mixed_modality_forward_lvr_inference(
     if last_position_hidden_state is not None:
         # only happen during inference
         # in fact, each instance's seq_len will be 1 in inference
-        inputs_embeds[lvr_mode_switch,-1,:] = last_position_hidden_state[lvr_mode_switch]
+        inputs_embeds[slvr_mode_switch,-1,:] = last_position_hidden_state[slvr_mode_switch]
 
     ''' 
         only happen during inference 
@@ -400,11 +400,11 @@ def qwen2_5_mixed_modality_forward_lvr_inference(
     '''
     if last_position_hidden_state is not None:
         # in fact, each instance's seq_len will be 1 in inference
-        inputs_embeds[lvr_mode_switch,-1,:] = last_position_hidden_state[lvr_mode_switch]
+        inputs_embeds[slvr_mode_switch,-1,:] = last_position_hidden_state[slvr_mode_switch]
 
     '''Only necessary in training'''
     # Pass dummy image and dummy grid to the visual model to avoid deepspeed error.
-    # if not lvr_mode_switch and (pixel_values is None and pixel_values_videos is None):
+    # if not slvr_mode_switch and (pixel_values is None and pixel_values_videos is None):
     #     # Create dummy pixel_values and grid_thw for avoiding deepspeed error.
     #     dummy_pixel = torch.zeros(784, 1176).to(self.model.visual.device)
     #     dummy_grid = torch.tensor([[1, 28, 28]]).to(self.model.visual.device)
@@ -447,47 +447,47 @@ def qwen2_5_mixed_modality_forward_lvr_inference(
         image_embeds = image_embeds.to(inputs_embeds.device, inputs_embeds.dtype)
         inputs_embeds = inputs_embeds.masked_scatter(image_mask_unsqueeze, image_embeds)
 
-        # IN TRAINING should we fill the lvr token positions with selected img tokrnd
-        if lvr_tokens is not None:
+        # IN TRAINING should we fill the slvr token positions with selected img tokrnd
+        if slvr_tokens is not None:
             '''
-                Filling the lvr tokens with image embeddings.
+                Filling the slvr tokens with image embeddings.
                 Applicable when each image input has multiple bboxes
             '''
             total_tokens = torch.sum(image_mask, dim=1)   # 1d tensor([216, 234, 234, 234]) for #vis_tokens in each instance in batch
             batch_size = input_ids.size(0) 
-            # lvr mask for lvr token locations in the batch, [bs, seq_length]
-            # in each instance, lvr tokens are True, others are False
-            lvr_mask = input_ids == self.config.lvr_id  
-            # Total length = number of <lvr> tokens in the batch
-            # seq_positions: flattend LOCAL positions of lvr tokens in the inputs_ids
-            batch_indices, seq_positions = torch.nonzero(lvr_mask, as_tuple=True)  
+            # slvr mask for slvr token locations in the batch, [bs, seq_length]
+            # in each instance, slvr tokens are True, others are False
+            slvr_mask = input_ids == self.config.slvr_id  
+            # Total length = number of <slvr> tokens in the batch
+            # seq_positions: flattend LOCAL positions of slvr tokens in the inputs_ids
+            batch_indices, seq_positions = torch.nonzero(slvr_mask, as_tuple=True)  
 
-            if isinstance(lvr_tokens,list):
+            if isinstance(slvr_tokens,list):
                 '''Exrtacting tokens from original image'''
                 #  GLOBAL starting index in `image_embeds` of each image in the batch
                 image_token_offsets = torch.cumsum(
                     F.pad(total_tokens, (1, 0)), dim=0
                 )[:-1]  # shape [B], offset into image_embeds for each batch element
 
-                global_lvr_token_indices = []
+                global_slvr_token_indices = []
 
-                for b, lvr_ids in enumerate(lvr_tokens):
+                for b, slvr_ids in enumerate(slvr_tokens):
                     # Convert local to global index
                     offset = image_token_offsets[b].item()
-                    global_lvr_token_indices.append(lvr_ids + offset)
-                global_lvr_token_indices = torch.cat(global_lvr_token_indices, dim=0)  # [L_total]
+                    global_slvr_token_indices.append(slvr_ids + offset)
+                global_slvr_token_indices = torch.cat(global_slvr_token_indices, dim=0)  # [L_total]
 
                 # Step 3: Gather the selected visual embeddings
-                selected_lvr_embeds = image_embeds[global_lvr_token_indices]  # [L_total, H]
+                selected_slvr_embeds = image_embeds[global_slvr_token_indices]  # [L_total, H]
 
                 # Step 4: Replace in input_embeds at the right batch and position
-                inputs_embeds[batch_indices, seq_positions] = selected_lvr_embeds
+                inputs_embeds[batch_indices, seq_positions] = selected_slvr_embeds
             else:
                 '''re-encode target area'''
-                # Now lvr_tokens is pixel_values of the cropped targets
-                selected_lvr_embeds = self.model.get_image_features(lvr_tokens, lvr_tokens_thw)
-                selected_lvr_embeds = torch.cat(selected_lvr_embeds, dim=0)
-                inputs_embeds[batch_indices, seq_positions] = selected_lvr_embeds
+                # Now slvr_tokens is pixel_values of the cropped targets
+                selected_slvr_embeds = self.model.get_image_features(slvr_tokens, slvr_tokens_thw)
+                selected_slvr_embeds = torch.cat(selected_slvr_embeds, dim=0)
+                inputs_embeds[batch_indices, seq_positions] = selected_slvr_embeds
 
     if attention_mask is not None:
         attention_mask = attention_mask.to(inputs_embeds.device)
@@ -543,11 +543,11 @@ def qwen2_5_mixed_modality_forward_lvr_inference(
     last_position_hidden_state = outputs.last_hidden_state[:,-1,:]
     logits = self.lm_head(hidden_states)
 
-    lvr_loss_fct = set_lvr_loss_fct(self.config.loss_lvr_fct)
+    slvr_loss_fct = set_slvr_loss_fct(self.config.loss_slvr_fct)
 
     loss = None
     loss_ce = None
-    loss_lvr = None
+    loss_slvr = None
     if labels is not None:
         # Upcast to float if we need to compute the loss to avoid potential precision issues
         logits = logits.float()
@@ -558,21 +558,21 @@ def qwen2_5_mixed_modality_forward_lvr_inference(
         loss_fct = CrossEntropyLoss()
         shift_logits = shift_logits.view(-1, self.config.vocab_size)
         shift_labels = shift_labels.view(-1)
-        # Don't want CE loss for <lvr> token
-        shift_labels = shift_labels.masked_fill(shift_labels == self.config.lvr_id, IGNORE_INDEX)
+        # Don't want CE loss for <slvr> token
+        shift_labels = shift_labels.masked_fill(shift_labels == self.config.slvr_id, IGNORE_INDEX)
 
         # Enable model parallelism
         shift_labels = shift_labels.to(shift_logits.device)
         loss_ce = loss_fct(shift_logits, shift_labels)
 
-        # lvr loss
-        # Get last hidden states for <lvr> token positions
+        # slvr loss
+        # Get last hidden states for <slvr> token positions
         seq_positions_start = seq_positions - 1  # Now points to vision_start
         ''' We need to convert to fp32 to avoid overflow by mse'''
         selected_hidden_states = hidden_states[batch_indices, seq_positions_start].to(torch.float32)  # [L_total, H]
-        selected_lvr_embeds = selected_lvr_embeds.to(torch.float32)
-        # Compute LVR loss between predicted and inserted lvr embeddings
-        loss_lvr = lvr_loss_fct(selected_hidden_states, selected_lvr_embeds)
+        selected_slvr_embeds = selected_slvr_embeds.to(torch.float32)
+        # Compute SLVR loss between predicted and inserted slvr embeddings
+        loss_slvr = slvr_loss_fct(selected_hidden_states, selected_slvr_embeds)
 
     if not return_dict:
         output = (logits,) + outputs[1:]
@@ -581,7 +581,7 @@ def qwen2_5_mixed_modality_forward_lvr_inference(
     return Qwen2_5_VLCausalLMOutputWithPast(
         # loss=loss,
         loss_ce=loss_ce,
-        loss_lvr=loss_lvr,
+        loss_slvr=loss_slvr,
         logits=logits,
         past_key_values=outputs.past_key_values,
         hidden_states=outputs.hidden_states,
@@ -594,10 +594,10 @@ def qwen2_5_mixed_modality_forward_lvr_inference(
 
 '''
     Coconut mode;
-    LVR head;
-    Note that this forward function is used for inferencing all the LVR models with a LVR head
+    SLVR head;
+    Note that this forward function is used for inferencing all the SLVR models with a SLVR head
 '''
-def qwen2_5_mixed_modality_forward_lvr_with_head(
+def qwen2_5_mixed_modality_forward_slvr_with_head(
     self,
     input_ids: torch.LongTensor = None,
     attention_mask: Optional[torch.Tensor] = None,
@@ -616,9 +616,9 @@ def qwen2_5_mixed_modality_forward_lvr_with_head(
     rope_deltas: Optional[torch.LongTensor] = None,
     cache_position: Optional[torch.LongTensor] = None,
     second_per_grid_ts: Optional[torch.Tensor] = None,
-    lvr_tokens: Optional[torch.Tensor] = None,      # This is for TRAINING: Where should the lvr img tokens be
-    lvr_tokens_thw: Optional[List[torch.Tensor]] = None,      # This is for TRAINING: Where should the lvr img tokens be
-    lvr_mode_switch: Optional[torch.Tensor] = None, # This is for INFERENCE: Which instance in the batch is in lvr mode
+    slvr_tokens: Optional[torch.Tensor] = None,      # This is for TRAINING: Where should the slvr img tokens be
+    slvr_tokens_thw: Optional[List[torch.Tensor]] = None,      # This is for TRAINING: Where should the slvr img tokens be
+    slvr_mode_switch: Optional[torch.Tensor] = None, # This is for INFERENCE: Which instance in the batch is in slvr mode
     last_position_hidden_state: Optional[torch.FloatTensor] = None, # This is for INFERENCE: last hidden state of the last position
 ) -> Union[Tuple, Qwen2_5_VLCausalLMOutputWithPast]:
     
@@ -638,11 +638,11 @@ def qwen2_5_mixed_modality_forward_lvr_with_head(
     '''
     if last_position_hidden_state is not None:
         # in fact, each instance's seq_len will be 1 in inference
-        inputs_embeds[lvr_mode_switch,-1,:] = last_position_hidden_state[lvr_mode_switch]
+        inputs_embeds[slvr_mode_switch,-1,:] = last_position_hidden_state[slvr_mode_switch]
     
     ''' Only necessary in training '''
     # Pass dummy image and dummy grid to the visual model to avoid deepspeed error.
-    if not lvr_mode_switch and (pixel_values is None and pixel_values_videos is None):
+    if not slvr_mode_switch and (pixel_values is None and pixel_values_videos is None):
         # Create dummy pixel_values and grid_thw for avoiding deepspeed error.
         dummy_pixel = torch.zeros(784, 1176).to(self.model.visual.device)
         dummy_grid = torch.tensor([[1, 28, 28]]).to(self.model.visual.device)
@@ -689,46 +689,46 @@ def qwen2_5_mixed_modality_forward_lvr_with_head(
         image_embeds = image_embeds.to(inputs_embeds.device, inputs_embeds.dtype)
         inputs_embeds = inputs_embeds.masked_scatter(image_mask_unsqueeze, image_embeds)
 
-        # IN TRAINING should we fill the lvr token positions with selected img tokrnd
-        if lvr_tokens is not None:
+        # IN TRAINING should we fill the slvr token positions with selected img tokrnd
+        if slvr_tokens is not None:
             '''
-                Filling the lvr tokens with image embeddings.
+                Filling the slvr tokens with image embeddings.
                 Applicable when each image input has multiple bboxes
             '''
             total_tokens = torch.sum(image_mask, dim=1)   # 1d tensor([216, 234, 234, 234]) for #vis_tokens in each instance in batch
             batch_size = input_ids.size(0) 
-            # lvr mask for lvr token locations in the batch, [bs, seq_length]
-            # in each instance, lvr tokens are True, others are False
-            lvr_mask = input_ids == self.config.lvr_id  
-            # Total length = number of <lvr> tokens in the batch
-            # seq_positions: flattend LOCAL positions of lvr tokens in the inputs_ids
-            batch_indices, seq_positions = torch.nonzero(lvr_mask, as_tuple=True)  
-            if isinstance(lvr_tokens,list):
+            # slvr mask for slvr token locations in the batch, [bs, seq_length]
+            # in each instance, slvr tokens are True, others are False
+            slvr_mask = input_ids == self.config.slvr_id  
+            # Total length = number of <slvr> tokens in the batch
+            # seq_positions: flattend LOCAL positions of slvr tokens in the inputs_ids
+            batch_indices, seq_positions = torch.nonzero(slvr_mask, as_tuple=True)  
+            if isinstance(slvr_tokens,list):
                 '''Exrtacting tokens from original image'''
                 #  GLOBAL starting index in `image_embeds` of each image in the batch
                 image_token_offsets = torch.cumsum(
                     F.pad(total_tokens, (1, 0)), dim=0
                 )[:-1]  # shape [B], offset into image_embeds for each batch element
 
-                global_lvr_token_indices = []
-                for b, lvr_ids in enumerate(lvr_tokens):
+                global_slvr_token_indices = []
+                for b, slvr_ids in enumerate(slvr_tokens):
                     # Convert local to global index
                     offset = image_token_offsets[b].item()
-                    global_lvr_token_indices.append(lvr_ids + offset)
-                global_lvr_token_indices = torch.cat(global_lvr_token_indices, dim=0)  # [L_total]
+                    global_slvr_token_indices.append(slvr_ids + offset)
+                global_slvr_token_indices = torch.cat(global_slvr_token_indices, dim=0)  # [L_total]
 
                 # Step 3: Gather the selected visual embeddings
-                selected_lvr_embeds = image_embeds[global_lvr_token_indices]  # [L_total, H]
+                selected_slvr_embeds = image_embeds[global_slvr_token_indices]  # [L_total, H]
 
                 # Step 4: Replace in input_embeds at the right batch and position
-                inputs_embeds[batch_indices, seq_positions] = selected_lvr_embeds
+                inputs_embeds[batch_indices, seq_positions] = selected_slvr_embeds
             
             else:
                 '''re-encode target area'''
-                # Now lvr_tokens is pixel_values of the cropped targets
-                selected_lvr_embeds = self.model.get_image_features(lvr_tokens, lvr_tokens_thw)
-                selected_lvr_embeds = torch.cat(selected_lvr_embeds, dim=0)
-                inputs_embeds[batch_indices, seq_positions] = selected_lvr_embeds
+                # Now slvr_tokens is pixel_values of the cropped targets
+                selected_slvr_embeds = self.model.get_image_features(slvr_tokens, slvr_tokens_thw)
+                selected_slvr_embeds = torch.cat(selected_slvr_embeds, dim=0)
+                inputs_embeds[batch_indices, seq_positions] = selected_slvr_embeds
 
             
 
@@ -781,27 +781,27 @@ def qwen2_5_mixed_modality_forward_lvr_with_head(
         cache_position=cache_position,
     )
 
-    '''apply lvr_head in training mode'''
-    if lvr_tokens is not None and lvr_mask.any():
-        # batch_indices, seq_positions = torch.nonzero(lvr_mask, as_tuple=True)
+    '''apply slvr_head in training mode'''
+    if slvr_tokens is not None and slvr_mask.any():
+        # batch_indices, seq_positions = torch.nonzero(slvr_mask, as_tuple=True)
         if len(batch_indices) > 0:
-            # Get last hidden states for <lvr> token positions, starting <vision_start>
+            # Get last hidden states for <slvr> token positions, starting <vision_start>
             seq_positions_start = seq_positions - 1  # shift left by 1 pos, now points to vision_start
-            outputs.last_hidden_state[batch_indices, seq_positions_start] = self.lvr_head(outputs.last_hidden_state[batch_indices, seq_positions_start])
+            outputs.last_hidden_state[batch_indices, seq_positions_start] = self.slvr_head(outputs.last_hidden_state[batch_indices, seq_positions_start])
 
-    '''apply lvr_head in _inference mode'''
-    if lvr_mode_switch:
-        outputs.last_hidden_state[lvr_mode_switch,:,:] = self.lvr_head(outputs.last_hidden_state[lvr_mode_switch,:,:])
+    '''apply slvr_head in _inference mode'''
+    if slvr_mode_switch:
+        outputs.last_hidden_state[slvr_mode_switch,:,:] = self.slvr_head(outputs.last_hidden_state[slvr_mode_switch,:,:])
 
     hidden_states = outputs[0]
     last_position_hidden_state = outputs.last_hidden_state[:,-1,:]
     logits = self.lm_head(hidden_states)
 
-    lvr_loss_fct = set_lvr_loss_fct(self.config.loss_lvr_fct)
+    slvr_loss_fct = set_slvr_loss_fct(self.config.loss_slvr_fct)
 
     loss = None
     loss_ce = None
-    loss_lvr = None
+    loss_slvr = None
     if labels is not None:
         # Upcast to float if we need to compute the loss to avoid potential precision issues
         logits = logits.float()
@@ -812,21 +812,21 @@ def qwen2_5_mixed_modality_forward_lvr_with_head(
         loss_fct = CrossEntropyLoss()
         shift_logits = shift_logits.view(-1, self.config.vocab_size)
         shift_labels = shift_labels.view(-1)
-        # Don't want CE loss for <lvr> token
-        shift_labels = shift_labels.masked_fill(shift_labels == self.config.lvr_id, IGNORE_INDEX)
+        # Don't want CE loss for <slvr> token
+        shift_labels = shift_labels.masked_fill(shift_labels == self.config.slvr_id, IGNORE_INDEX)
 
         # Enable model parallelism
         shift_labels = shift_labels.to(shift_logits.device)
         loss_ce = loss_fct(shift_logits, shift_labels)
 
-        # lvr loss
-        # Get last hidden states for <lvr> token positions
+        # slvr loss
+        # Get last hidden states for <slvr> token positions
         seq_positions_start = seq_positions - 1  # Now points to vision_start
         ''' We need to convert to fp32 to avoid overflow by mse'''
         selected_hidden_states = hidden_states[batch_indices, seq_positions_start].to(torch.float32)  # [L_total, H]
-        selected_lvr_embeds = selected_lvr_embeds.to(torch.float32)
-        # Compute LVR loss between predicted and inserted lvr embeddings
-        loss_lvr = lvr_loss_fct(selected_hidden_states, selected_lvr_embeds)
+        selected_slvr_embeds = selected_slvr_embeds.to(torch.float32)
+        # Compute SLVR loss between predicted and inserted slvr embeddings
+        loss_slvr = slvr_loss_fct(selected_hidden_states, selected_slvr_embeds)
 
 
     if not return_dict:
@@ -836,7 +836,7 @@ def qwen2_5_mixed_modality_forward_lvr_with_head(
     return Qwen2_5_VLCausalLMOutputWithPast(
         # loss=loss,
         loss_ce=loss_ce,
-        loss_lvr=loss_lvr,
+        loss_slvr=loss_slvr,
         logits=logits,
         past_key_values=outputs.past_key_values,
         hidden_states=outputs.hidden_states,
@@ -849,7 +849,7 @@ def qwen2_5_mixed_modality_forward_lvr_with_head(
 
 
 
-def qwen2_5_mixed_modality_forward_lvr_with_head_inference(
+def qwen2_5_mixed_modality_forward_slvr_with_head_inference(
     self,
     input_ids: torch.LongTensor = None,
     attention_mask: Optional[torch.Tensor] = None,
@@ -868,9 +868,9 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_inference(
     rope_deltas: Optional[torch.LongTensor] = None,
     cache_position: Optional[torch.LongTensor] = None,
     second_per_grid_ts: Optional[torch.Tensor] = None,
-    lvr_tokens: Optional[torch.Tensor] = None,      # This is for TRAINING: Where should the lvr img tokens be
-    lvr_tokens_thw: Optional[List[torch.Tensor]] = None,      # This is for TRAINING: Where should the lvr img tokens be
-    lvr_mode_switch: Optional[torch.Tensor] = None, # This is for INFERENCE: Which instance in the batch is in lvr mode
+    slvr_tokens: Optional[torch.Tensor] = None,      # This is for TRAINING: Where should the slvr img tokens be
+    slvr_tokens_thw: Optional[List[torch.Tensor]] = None,      # This is for TRAINING: Where should the slvr img tokens be
+    slvr_mode_switch: Optional[torch.Tensor] = None, # This is for INFERENCE: Which instance in the batch is in slvr mode
     last_position_hidden_state: Optional[torch.FloatTensor] = None, # This is for INFERENCE: last hidden state of the last position
     **kwargs: Unpack[TransformersKwargs],
 ) -> Union[Tuple, Qwen2_5_VLCausalLMOutputWithPast]:
@@ -891,11 +891,11 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_inference(
     '''
     if last_position_hidden_state is not None:
         # in fact, each instance's seq_len will be 1 in inference
-        inputs_embeds[lvr_mode_switch,-1,:] = last_position_hidden_state[lvr_mode_switch]
+        inputs_embeds[slvr_mode_switch,-1,:] = last_position_hidden_state[slvr_mode_switch]
     
     ''' Only necessary in training '''
     # Pass dummy image and dummy grid to the visual model to avoid deepspeed error.
-    if not lvr_mode_switch and (pixel_values is None and pixel_values_videos is None):
+    if not slvr_mode_switch and (pixel_values is None and pixel_values_videos is None):
         # Create dummy pixel_values and grid_thw for avoiding deepspeed error.
         dummy_pixel = torch.zeros(784, 1176).to(self.model.visual.device)
         dummy_grid = torch.tensor([[1, 28, 28]]).to(self.model.visual.device)
@@ -942,46 +942,46 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_inference(
         image_embeds = image_embeds.to(inputs_embeds.device, inputs_embeds.dtype)
         inputs_embeds = inputs_embeds.masked_scatter(image_mask_unsqueeze, image_embeds)
 
-        # IN TRAINING should we fill the lvr token positions with selected img tokrnd
-        if lvr_tokens is not None:
+        # IN TRAINING should we fill the slvr token positions with selected img tokrnd
+        if slvr_tokens is not None:
             '''
-                Filling the lvr tokens with image embeddings.
+                Filling the slvr tokens with image embeddings.
                 Applicable when each image input has multiple bboxes
             '''
             total_tokens = torch.sum(image_mask, dim=1)   # 1d tensor([216, 234, 234, 234]) for #vis_tokens in each instance in batch
             batch_size = input_ids.size(0) 
-            # lvr mask for lvr token locations in the batch, [bs, seq_length]
-            # in each instance, lvr tokens are True, others are False
-            lvr_mask = input_ids == self.config.lvr_id  
-            # Total length = number of <lvr> tokens in the batch
-            # seq_positions: flattend LOCAL positions of lvr tokens in the inputs_ids
-            batch_indices, seq_positions = torch.nonzero(lvr_mask, as_tuple=True)  
-            if isinstance(lvr_tokens,list):
+            # slvr mask for slvr token locations in the batch, [bs, seq_length]
+            # in each instance, slvr tokens are True, others are False
+            slvr_mask = input_ids == self.config.slvr_id  
+            # Total length = number of <slvr> tokens in the batch
+            # seq_positions: flattend LOCAL positions of slvr tokens in the inputs_ids
+            batch_indices, seq_positions = torch.nonzero(slvr_mask, as_tuple=True)  
+            if isinstance(slvr_tokens,list):
                 '''Exrtacting tokens from original image'''
                 #  GLOBAL starting index in `image_embeds` of each image in the batch
                 image_token_offsets = torch.cumsum(
                     F.pad(total_tokens, (1, 0)), dim=0
                 )[:-1]  # shape [B], offset into image_embeds for each batch element
 
-                global_lvr_token_indices = []
-                for b, lvr_ids in enumerate(lvr_tokens):
+                global_slvr_token_indices = []
+                for b, slvr_ids in enumerate(slvr_tokens):
                     # Convert local to global index
                     offset = image_token_offsets[b].item()
-                    global_lvr_token_indices.append(lvr_ids + offset)
-                global_lvr_token_indices = torch.cat(global_lvr_token_indices, dim=0)  # [L_total]
+                    global_slvr_token_indices.append(slvr_ids + offset)
+                global_slvr_token_indices = torch.cat(global_slvr_token_indices, dim=0)  # [L_total]
 
                 # Step 3: Gather the selected visual embeddings
-                selected_lvr_embeds = image_embeds[global_lvr_token_indices]  # [L_total, H]
+                selected_slvr_embeds = image_embeds[global_slvr_token_indices]  # [L_total, H]
 
                 # Step 4: Replace in input_embeds at the right batch and position
-                inputs_embeds[batch_indices, seq_positions] = selected_lvr_embeds
+                inputs_embeds[batch_indices, seq_positions] = selected_slvr_embeds
             
             else:
                 '''re-encode target area'''
-                # Now lvr_tokens is pixel_values of the cropped targets
-                selected_lvr_embeds = self.model.get_image_features(lvr_tokens, lvr_tokens_thw)
-                selected_lvr_embeds = torch.cat(selected_lvr_embeds, dim=0)
-                inputs_embeds[batch_indices, seq_positions] = selected_lvr_embeds
+                # Now slvr_tokens is pixel_values of the cropped targets
+                selected_slvr_embeds = self.model.get_image_features(slvr_tokens, slvr_tokens_thw)
+                selected_slvr_embeds = torch.cat(selected_slvr_embeds, dim=0)
+                inputs_embeds[batch_indices, seq_positions] = selected_slvr_embeds
 
             
 
@@ -1035,31 +1035,31 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_inference(
         **kwargs
     )
 
-    '''apply lvr_head in training mode'''
-    if lvr_tokens is not None and lvr_mask.any():
-        # batch_indices, seq_positions = torch.nonzero(lvr_mask, as_tuple=True)
+    '''apply slvr_head in training mode'''
+    if slvr_tokens is not None and slvr_mask.any():
+        # batch_indices, seq_positions = torch.nonzero(slvr_mask, as_tuple=True)
         if len(batch_indices) > 0:
-            # Get last hidden states for <lvr> token positions, starting <vision_start>
+            # Get last hidden states for <slvr> token positions, starting <vision_start>
             seq_positions_start = seq_positions - 1  # shift left by 1 pos, now points to vision_start
-            outputs.last_hidden_state[batch_indices, seq_positions_start] = self.lvr_head(outputs.last_hidden_state[batch_indices, seq_positions_start])
+            outputs.last_hidden_state[batch_indices, seq_positions_start] = self.slvr_head(outputs.last_hidden_state[batch_indices, seq_positions_start])
 
             # selected_hidden_states = outputs.last_hidden_state[batch_indices, seq_positions_start]
-            # lvr_head_output = self.lvr_head(selected_hidden_states)
-            # outputs.last_hidden_state[batch_indices, seq_positions_start] = lvr_head_output
+            # slvr_head_output = self.slvr_head(selected_hidden_states)
+            # outputs.last_hidden_state[batch_indices, seq_positions_start] = slvr_head_output
 
-    '''apply lvr_head in _inference mode'''
-    if lvr_mode_switch:
-        outputs.last_hidden_state[lvr_mode_switch,:,:] = self.lvr_head(outputs.last_hidden_state[lvr_mode_switch,:,:])
+    '''apply slvr_head in _inference mode'''
+    if slvr_mode_switch:
+        outputs.last_hidden_state[slvr_mode_switch,:,:] = self.slvr_head(outputs.last_hidden_state[slvr_mode_switch,:,:])
 
     hidden_states = outputs[0]
     last_position_hidden_state = outputs.last_hidden_state[:,-1,:]
     logits = self.lm_head(hidden_states)
 
-    lvr_loss_fct = set_lvr_loss_fct(self.config.loss_lvr_fct)
+    slvr_loss_fct = set_slvr_loss_fct(self.config.loss_slvr_fct)
 
     loss = None
     loss_ce = None
-    loss_lvr = None
+    loss_slvr = None
     if labels is not None:
         # Upcast to float if we need to compute the loss to avoid potential precision issues
         logits = logits.float()
@@ -1070,21 +1070,21 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_inference(
         loss_fct = CrossEntropyLoss()
         shift_logits = shift_logits.view(-1, self.config.vocab_size)
         shift_labels = shift_labels.view(-1)
-        # Don't want CE loss for <lvr> token
-        shift_labels = shift_labels.masked_fill(shift_labels == self.config.lvr_id, IGNORE_INDEX)
+        # Don't want CE loss for <slvr> token
+        shift_labels = shift_labels.masked_fill(shift_labels == self.config.slvr_id, IGNORE_INDEX)
 
         # Enable model parallelism
         shift_labels = shift_labels.to(shift_logits.device)
         loss_ce = loss_fct(shift_logits, shift_labels)
 
-        # lvr loss
-        # Get last hidden states for <lvr> token positions
+        # slvr loss
+        # Get last hidden states for <slvr> token positions
         seq_positions_start = seq_positions - 1  # Now points to vision_start
         ''' We need to convert to fp32 to avoid overflow by mse'''
         selected_hidden_states = hidden_states[batch_indices, seq_positions_start].to(torch.float32)  # [L_total, H]
-        selected_lvr_embeds = selected_lvr_embeds.to(torch.float32)
-        # Compute LVR loss between predicted and inserted lvr embeddings
-        loss_lvr = lvr_loss_fct(selected_hidden_states, selected_lvr_embeds)
+        selected_slvr_embeds = selected_slvr_embeds.to(torch.float32)
+        # Compute SLVR loss between predicted and inserted slvr embeddings
+        loss_slvr = slvr_loss_fct(selected_hidden_states, selected_slvr_embeds)
 
 
     if not return_dict:
@@ -1094,7 +1094,7 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_inference(
     return Qwen2_5_VLCausalLMOutputWithPast(
         # loss=loss,
         loss_ce=loss_ce,
-        loss_lvr=loss_lvr,
+        loss_slvr=loss_slvr,
         logits=logits,
         past_key_values=outputs.past_key_values,
         hidden_states=outputs.hidden_states,
@@ -1106,9 +1106,9 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_inference(
 
 '''
     Coconut mode
-    LVR head
+    SLVR head
 '''
-def qwen2_5_mixed_modality_forward_lvr_with_head_with_modeSwitchLoss(
+def qwen2_5_mixed_modality_forward_slvr_with_head_with_modeSwitchLoss(
     self,
     input_ids: torch.LongTensor = None,
     attention_mask: Optional[torch.Tensor] = None,
@@ -1127,8 +1127,8 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_with_modeSwitchLoss(
     rope_deltas: Optional[torch.LongTensor] = None,
     cache_position: Optional[torch.LongTensor] = None,
     second_per_grid_ts: Optional[torch.Tensor] = None,
-    lvr_tokens: Optional[torch.Tensor] = None,      # This is for TRAINING: Where should the lvr img tokens be
-    lvr_mode_switch: Optional[torch.Tensor] = None, # This is for INFERENCE: Which instance in the batch is in lvr mode
+    slvr_tokens: Optional[torch.Tensor] = None,      # This is for TRAINING: Where should the slvr img tokens be
+    slvr_mode_switch: Optional[torch.Tensor] = None, # This is for INFERENCE: Which instance in the batch is in slvr mode
     last_position_hidden_state: Optional[torch.FloatTensor] = None, # This is for INFERENCE: last hidden state of the last position
 ) -> Union[Tuple, Qwen2_5_VLCausalLMOutputWithPast]:
     
@@ -1146,13 +1146,13 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_with_modeSwitchLoss(
         only happen during inference 
         inputs_embeds in shape (bs, seq_len, hidden)
     '''
-    if lvr_mode_switch:
+    if slvr_mode_switch:
         # in fact, each instance's seq_len will be 1 in inference
-        inputs_embeds[lvr_mode_switch,-1,:] = last_position_hidden_state[lvr_mode_switch]
+        inputs_embeds[slvr_mode_switch,-1,:] = last_position_hidden_state[slvr_mode_switch]
     
     ''' Only necessary in training '''
     # Pass dummy image and dummy grid to the visual model to avoid deepspeed error.
-    if not lvr_mode_switch and (pixel_values is None and pixel_values_videos is None):
+    if not slvr_mode_switch and (pixel_values is None and pixel_values_videos is None):
         # Create dummy pixel_values and grid_thw for avoiding deepspeed error.
         dummy_pixel = torch.zeros(784, 1176).to(self.model.visual.device)
         dummy_grid = torch.tensor([[1, 28, 28]]).to(self.model.visual.device)
@@ -1199,39 +1199,39 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_with_modeSwitchLoss(
         image_embeds = image_embeds.to(inputs_embeds.device, inputs_embeds.dtype)
         inputs_embeds = inputs_embeds.masked_scatter(image_mask_unsqueeze, image_embeds)
 
-        # IN TRAINING should we fill the lvr token positions with selected img tokrnd
-        if lvr_tokens:
+        # IN TRAINING should we fill the slvr token positions with selected img tokrnd
+        if slvr_tokens:
             '''
-                Filling the lvr tokens with image embeddings.
+                Filling the slvr tokens with image embeddings.
                 Applicable when each image input has multiple bboxes
             '''
             total_tokens = torch.sum(image_mask, dim=1)   # 1d tensor([216, 234, 234, 234]) for #vis_tokens in each instance in batch
             batch_size = input_ids.size(0) 
-            # lvr mask for lvr token locations in the batch, [bs, seq_length]
-            # in each instance, lvr tokens are True, others are False
-            lvr_mask = input_ids == self.config.lvr_id  
-            # Total length = number of <lvr> tokens in the batch
-            # seq_positions: flattend LOCAL positions of lvr tokens in the inputs_ids
-            batch_indices, seq_positions = torch.nonzero(lvr_mask, as_tuple=True)  
+            # slvr mask for slvr token locations in the batch, [bs, seq_length]
+            # in each instance, slvr tokens are True, others are False
+            slvr_mask = input_ids == self.config.slvr_id  
+            # Total length = number of <slvr> tokens in the batch
+            # seq_positions: flattend LOCAL positions of slvr tokens in the inputs_ids
+            batch_indices, seq_positions = torch.nonzero(slvr_mask, as_tuple=True)  
 
         #  GLOBAL starting index in `image_embeds` of each image in the batch
             image_token_offsets = torch.cumsum(
                 F.pad(total_tokens, (1, 0)), dim=0
             )[:-1]  # shape [B], offset into image_embeds for each batch element
 
-            global_lvr_token_indices = []
+            global_slvr_token_indices = []
 
-            for b, lvr_ids in enumerate(lvr_tokens):
+            for b, slvr_ids in enumerate(slvr_tokens):
                 # Convert local to global index
                 offset = image_token_offsets[b].item()
-                global_lvr_token_indices.append(lvr_ids + offset)
-            global_lvr_token_indices = torch.cat(global_lvr_token_indices, dim=0)  # [L_total]
+                global_slvr_token_indices.append(slvr_ids + offset)
+            global_slvr_token_indices = torch.cat(global_slvr_token_indices, dim=0)  # [L_total]
 
             # Step 3: Gather the selected visual embeddings
-            selected_lvr_embeds = image_embeds[global_lvr_token_indices]  # [L_total, H]
+            selected_slvr_embeds = image_embeds[global_slvr_token_indices]  # [L_total, H]
 
             # Step 4: Replace in input_embeds at the right batch and position
-            inputs_embeds[batch_indices, seq_positions] = selected_lvr_embeds
+            inputs_embeds[batch_indices, seq_positions] = selected_slvr_embeds
             
 
     if attention_mask is not None:
@@ -1283,27 +1283,27 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_with_modeSwitchLoss(
         cache_position=cache_position,
     )
 
-    '''apply lvr_head in training mode'''
-    if lvr_tokens and lvr_mask.any():
-        # batch_indices, seq_positions = torch.nonzero(lvr_mask, as_tuple=True)
+    '''apply slvr_head in training mode'''
+    if slvr_tokens and slvr_mask.any():
+        # batch_indices, seq_positions = torch.nonzero(slvr_mask, as_tuple=True)
         if len(batch_indices) > 0:
-            # Get last hidden states for <lvr> token positions, starting <vision_start>
+            # Get last hidden states for <slvr> token positions, starting <vision_start>
             seq_positions_start = seq_positions - 1  # shift left by 1 pos, now points to vision_start
-            outputs.last_hidden_state[batch_indices, seq_positions_start] = self.lvr_head(outputs.last_hidden_state[batch_indices, seq_positions_start])
+            outputs.last_hidden_state[batch_indices, seq_positions_start] = self.slvr_head(outputs.last_hidden_state[batch_indices, seq_positions_start])
 
-    '''apply lvr_head in _inference mode'''
-    if lvr_mode_switch:
-        outputs.last_hidden_state[lvr_mode_switch,:,:] = self.lvr_head(outputs.last_hidden_state[lvr_mode_switch,:,:])
+    '''apply slvr_head in _inference mode'''
+    if slvr_mode_switch:
+        outputs.last_hidden_state[slvr_mode_switch,:,:] = self.slvr_head(outputs.last_hidden_state[slvr_mode_switch,:,:])
 
     hidden_states = outputs[0]
     last_position_hidden_state = outputs.last_hidden_state[:,-1,:]
     logits = self.lm_head(hidden_states)
 
-    lvr_loss_fct = set_lvr_loss_fct(self.config.loss_lvr_fct)
+    slvr_loss_fct = set_slvr_loss_fct(self.config.loss_slvr_fct)
 
     loss = None
     loss_ce = None
-    loss_lvr = None
+    loss_slvr = None
     if labels is not None:
         # Upcast to float if we need to compute the loss to avoid potential precision issues
         logits = logits.float()
@@ -1314,38 +1314,38 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_with_modeSwitchLoss(
         loss_fct = CrossEntropyLoss()
         shift_logits = shift_logits.view(-1, self.config.vocab_size)
         shift_labels = shift_labels.view(-1)
-        # Don't want CE loss for <lvr> token
-        shift_labels = shift_labels.masked_fill(shift_labels == self.config.lvr_id, IGNORE_INDEX)
+        # Don't want CE loss for <slvr> token
+        shift_labels = shift_labels.masked_fill(shift_labels == self.config.slvr_id, IGNORE_INDEX)
 
         # Enable model parallelism
         shift_labels = shift_labels.to(shift_logits.device)
         loss_ce = loss_fct(shift_logits, shift_labels)
 
-        # lvr loss
-        # Get last hidden states for <lvr> token positions
+        # slvr loss
+        # Get last hidden states for <slvr> token positions
         seq_positions_start = seq_positions - 1  # Now points to vision_start
         ''' We need to convert to fp32 to avoid overflow by mse'''
         selected_hidden_states = hidden_states[batch_indices, seq_positions_start].to(torch.float32)  # [L_total, H]
-        selected_lvr_embeds = selected_lvr_embeds.to(torch.float32)
-        # Compute LVR loss between predicted and inserted lvr embeddings
-        loss_lvr = lvr_loss_fct(selected_hidden_states, selected_lvr_embeds)
+        selected_slvr_embeds = selected_slvr_embeds.to(torch.float32)
+        # Compute SLVR loss between predicted and inserted slvr embeddings
+        loss_slvr = slvr_loss_fct(selected_hidden_states, selected_slvr_embeds)
 
         # mode switch loss
 
-        lvr_or_lvrstart_mask = (input_ids == self.config.lvr_start_id) | (input_ids == self.config.lvr_id)
+        slvr_or_slvrstart_mask = (input_ids == self.config.slvr_start_id) | (input_ids == self.config.slvr_id)
 
         # Find the next tokens of each position
         shifted_input_ids = torch.roll(input_ids, shifts=-1, dims=1)
-        # the lvr token that is right before vision_end token
-        is_last_lvr = lvr_or_lvrstart_mask & (shifted_input_ids == self.config.lvr_end_id)
-        # 1 if it's the last <lvr> before <vision_end>, else 0
-        targets = is_last_lvr.float()  # [batch_size, seq_len]
+        # the slvr token that is right before vision_end token
+        is_last_slvr = slvr_or_slvrstart_mask & (shifted_input_ids == self.config.slvr_end_id)
+        # 1 if it's the last <slvr> before <vision_end>, else 0
+        targets = is_last_slvr.float()  # [batch_size, seq_len]
 
-        lvr_end_logits = logits[..., self.config.lvr_end_id]  # [batch_size, seq_len]
+        slvr_end_logits = logits[..., self.config.slvr_end_id]  # [batch_size, seq_len]
 
-        # Apply mask to focus only on <vision_start>,<lvr> token positions
-        masked_logits = lvr_end_logits[lvr_or_lvrstart_mask]  # [num_lvr_tokens]
-        masked_targets = targets[lvr_or_lvrstart_mask]        # [num_lvr_tokens]
+        # Apply mask to focus only on <vision_start>,<slvr> token positions
+        masked_logits = slvr_end_logits[slvr_or_slvrstart_mask]  # [num_slvr_tokens]
+        masked_targets = targets[slvr_or_slvrstart_mask]        # [num_slvr_tokens]
 
         loss_mode_switch = F.binary_cross_entropy_with_logits(masked_logits, masked_targets)
 
@@ -1357,7 +1357,7 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_with_modeSwitchLoss(
     return Qwen2_5_VLCausalLMOutputWithPast(
         # loss=loss,
         loss_ce=loss_ce,
-        loss_lvr=loss_lvr,
+        loss_slvr=loss_slvr,
         loss_mode_switch=loss_mode_switch,
         logits=logits,
         past_key_values=outputs.past_key_values,
@@ -1370,10 +1370,10 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_with_modeSwitchLoss(
 
 '''
     Coconut mode
-    LVR Head
-    Padded <LVR_end> latent token as the mode switching signal
+    SLVR Head
+    Padded <SLVR_end> latent token as the mode switching signal
 '''
-def qwen2_5_mixed_modality_forward_lvr_with_head_with_latentEndToken(
+def qwen2_5_mixed_modality_forward_slvr_with_head_with_latentEndToken(
     self,
     input_ids: torch.LongTensor = None,
     attention_mask: Optional[torch.Tensor] = None,
@@ -1392,8 +1392,8 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_with_latentEndToken(
     rope_deltas: Optional[torch.LongTensor] = None,
     cache_position: Optional[torch.LongTensor] = None,
     second_per_grid_ts: Optional[torch.Tensor] = None,
-    lvr_tokens: Optional[torch.Tensor] = None,      # This is for TRAINING: Where should the lvr img tokens be
-    lvr_mode_switch: Optional[torch.Tensor] = None, # This is for INFERENCE: Which instance in the batch is in lvr mode
+    slvr_tokens: Optional[torch.Tensor] = None,      # This is for TRAINING: Where should the slvr img tokens be
+    slvr_mode_switch: Optional[torch.Tensor] = None, # This is for INFERENCE: Which instance in the batch is in slvr mode
     last_position_hidden_state: Optional[torch.FloatTensor] = None, # This is for INFERENCE: last hidden state of the last position
 ) -> Union[Tuple, Qwen2_5_VLCausalLMOutputWithPast]:
     
@@ -1411,13 +1411,13 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_with_latentEndToken(
         only happen during inference 
         inputs_embeds in shape (bs, seq_len, hidden)
     '''
-    if lvr_mode_switch:
+    if slvr_mode_switch:
         # in fact, each instance's seq_len will be 1 in inference
-        inputs_embeds[lvr_mode_switch,-1,:] = last_position_hidden_state[lvr_mode_switch]
+        inputs_embeds[slvr_mode_switch,-1,:] = last_position_hidden_state[slvr_mode_switch]
     
     ''' Only necessary in training '''
     # Pass dummy image and dummy grid to the visual model to avoid deepspeed error.
-    if not lvr_mode_switch and (pixel_values is None and pixel_values_videos is None):
+    if not slvr_mode_switch and (pixel_values is None and pixel_values_videos is None):
         # Create dummy pixel_values and grid_thw for avoiding deepspeed error.
         dummy_pixel = torch.zeros(784, 1176).to(self.model.visual.device)
         dummy_grid = torch.tensor([[1, 28, 28]]).to(self.model.visual.device)
@@ -1464,45 +1464,45 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_with_latentEndToken(
         image_embeds = image_embeds.to(inputs_embeds.device, inputs_embeds.dtype)
         inputs_embeds = inputs_embeds.masked_scatter(image_mask_unsqueeze, image_embeds)
 
-        # IN TRAINING should we fill the lvr token positions with selected img tokrnd
-        if lvr_tokens:
+        # IN TRAINING should we fill the slvr token positions with selected img tokrnd
+        if slvr_tokens:
             '''
-                Filling the lvr tokens with image embeddings.
+                Filling the slvr tokens with image embeddings.
                 Applicable when each image input has multiple bboxes
             '''
             total_tokens = torch.sum(image_mask, dim=1)   # 1d tensor([216, 234, 234, 234]) for #vis_tokens in each instance in batch
             batch_size = input_ids.size(0) 
-            # lvr mask for lvr token locations in the batch, [bs, seq_length]
-            # in each instance, lvr tokens are True, others are False
-            lvr_mask = input_ids == self.config.lvr_id  
-            # Total length = number of <lvr> tokens in the batch
-            # seq_positions: flattend LOCAL positions of lvr tokens in the inputs_ids
-            batch_indices, seq_positions = torch.nonzero(lvr_mask, as_tuple=True)  
+            # slvr mask for slvr token locations in the batch, [bs, seq_length]
+            # in each instance, slvr tokens are True, others are False
+            slvr_mask = input_ids == self.config.slvr_id  
+            # Total length = number of <slvr> tokens in the batch
+            # seq_positions: flattend LOCAL positions of slvr tokens in the inputs_ids
+            batch_indices, seq_positions = torch.nonzero(slvr_mask, as_tuple=True)  
 
         #  GLOBAL starting index in `image_embeds` of each image in the batch
             image_token_offsets = torch.cumsum(
                 F.pad(total_tokens, (1, 0)), dim=0
             )[:-1]  # shape [B], offset into image_embeds for each batch element
 
-            global_lvr_token_indices = []
+            global_slvr_token_indices = []
 
-            for b, lvr_ids in enumerate(lvr_tokens):
+            for b, slvr_ids in enumerate(slvr_tokens):
                 # Convert local to global index
                 offset = image_token_offsets[b].item()
-                global_lvr_token_indices.append(lvr_ids + offset)
-            global_lvr_token_indices = torch.cat(global_lvr_token_indices, dim=0)  # [L_total]
+                global_slvr_token_indices.append(slvr_ids + offset)
+            global_slvr_token_indices = torch.cat(global_slvr_token_indices, dim=0)  # [L_total]
 
             # Step 3: Gather the selected visual embeddings
-            selected_lvr_embeds = image_embeds[global_lvr_token_indices]  # [L_total, H]
+            selected_slvr_embeds = image_embeds[global_slvr_token_indices]  # [L_total, H]
 
             # Step 4: Replace in input_embeds at the right batch and position
-            inputs_embeds[batch_indices, seq_positions] = selected_lvr_embeds
+            inputs_embeds[batch_indices, seq_positions] = selected_slvr_embeds
 
-            '''Apply lvr_latent_end_token'''
-            lvr_latent_end_mask = (input_ids == self.config.lvr_latent_end_id)
-            batch_indices_latentend, seq_positions_latentend = torch.nonzero(lvr_latent_end_mask, as_tuple=True)
-            if lvr_latent_end_mask.any():
-                inputs_embeds[lvr_latent_end_mask] = self.lvr_latent_end_emb.to(inputs_embeds.device)
+            '''Apply slvr_latent_end_token'''
+            slvr_latent_end_mask = (input_ids == self.config.slvr_latent_end_id)
+            batch_indices_latentend, seq_positions_latentend = torch.nonzero(slvr_latent_end_mask, as_tuple=True)
+            if slvr_latent_end_mask.any():
+                inputs_embeds[slvr_latent_end_mask] = self.slvr_latent_end_emb.to(inputs_embeds.device)
             
 
     if attention_mask is not None:
@@ -1554,33 +1554,33 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_with_latentEndToken(
         cache_position=cache_position,
     )
 
-    '''apply lvr_head in training mode'''
-    if lvr_tokens and lvr_mask.any():
-        # batch_indices, seq_positions = torch.nonzero(lvr_mask, as_tuple=True)
+    '''apply slvr_head in training mode'''
+    if slvr_tokens and slvr_mask.any():
+        # batch_indices, seq_positions = torch.nonzero(slvr_mask, as_tuple=True)
         if len(batch_indices) > 0:
-            # Get last hidden states for <lvr> token positions, starting <vision_start>
+            # Get last hidden states for <slvr> token positions, starting <vision_start>
             seq_positions_start = seq_positions - 1  # shift left by 1 pos, now points to vision_start
-            outputs.last_hidden_state[batch_indices, seq_positions_start] = self.lvr_head(outputs.last_hidden_state[batch_indices, seq_positions_start])
+            outputs.last_hidden_state[batch_indices, seq_positions_start] = self.slvr_head(outputs.last_hidden_state[batch_indices, seq_positions_start])
 
-            '''In this mode, <|lvr_latent_end|> is also a latent token'''
+            '''In this mode, <|slvr_latent_end|> is also a latent token'''
             seq_positions_start_latentend = seq_positions_latentend - 1
-            outputs.last_hidden_state[batch_indices_latentend, seq_positions_start_latentend] = self.lvr_head(outputs.last_hidden_state[batch_indices_latentend, seq_positions_start_latentend])
+            outputs.last_hidden_state[batch_indices_latentend, seq_positions_start_latentend] = self.slvr_head(outputs.last_hidden_state[batch_indices_latentend, seq_positions_start_latentend])
 
 
-    '''apply lvr_head in _inference mode'''
-    if lvr_mode_switch:
-        outputs.last_hidden_state[lvr_mode_switch,:,:] = self.lvr_head(outputs.last_hidden_state[lvr_mode_switch,:,:])
+    '''apply slvr_head in _inference mode'''
+    if slvr_mode_switch:
+        outputs.last_hidden_state[slvr_mode_switch,:,:] = self.slvr_head(outputs.last_hidden_state[slvr_mode_switch,:,:])
 
     hidden_states = outputs[0]
     last_position_hidden_state = outputs.last_hidden_state[:,-1,:]
     logits = self.lm_head(hidden_states)
 
-    lvr_loss_fct = set_lvr_loss_fct(self.config.loss_lvr_fct)
-    mode_switch_loss_fct = set_lvr_loss_fct(self.config.loss_mode_switch_fct)
+    slvr_loss_fct = set_slvr_loss_fct(self.config.loss_slvr_fct)
+    mode_switch_loss_fct = set_slvr_loss_fct(self.config.loss_mode_switch_fct)
 
     loss = None
     loss_ce = None
-    loss_lvr = None
+    loss_slvr = None
     if labels is not None:
         # Upcast to float if we need to compute the loss to avoid potential precision issues
         logits = logits.float()
@@ -1591,28 +1591,28 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_with_latentEndToken(
         loss_fct = CrossEntropyLoss()
         shift_logits = shift_logits.view(-1, self.config.vocab_size)
         shift_labels = shift_labels.view(-1)
-        # Don't want CE loss for <lvr> token
-        shift_labels = shift_labels.masked_fill((shift_labels == self.config.lvr_id)|(shift_labels == self.config.lvr_latent_end_id), IGNORE_INDEX)
+        # Don't want CE loss for <slvr> token
+        shift_labels = shift_labels.masked_fill((shift_labels == self.config.slvr_id)|(shift_labels == self.config.slvr_latent_end_id), IGNORE_INDEX)
 
         # Enable model parallelism
         shift_labels = shift_labels.to(shift_logits.device)
         loss_ce = loss_fct(shift_logits, shift_labels)
 
-        # lvr loss
-        # Get last hidden states for <lvr> token positions
+        # slvr loss
+        # Get last hidden states for <slvr> token positions
         seq_positions_start = seq_positions - 1
         selected_hidden_states = hidden_states[batch_indices, seq_positions_start].to(torch.float32)  # [L_total, H]
-        # Get last hidden states for <lvr_latent_end> token positions
+        # Get last hidden states for <slvr_latent_end> token positions
         seq_positions_start_latentend = seq_positions_latentend - 1
         selected_hidden_states_latentend = hidden_states[batch_indices_latentend, seq_positions_start_latentend].to(torch.float32)  # [L_total, H]
 
         ''' We need to convert to fp32 to avoid overflow by mse'''
-        selected_lvr_embeds = selected_lvr_embeds.to(torch.float32)
-        selected_lvr_embeds_latentend = self.lvr_latent_end_emb.unsqueeze(0).expand_as(selected_hidden_states_latentend).to(torch.float32)
-        selected_lvr_embeds_latentend = selected_lvr_embeds_latentend.to(selected_hidden_states_latentend.device)
-        # Compute LVR loss between predicted and inserted lvr embeddings
-        loss_lvr = lvr_loss_fct(selected_hidden_states, selected_lvr_embeds) 
-        loss_mode_switch = mode_switch_loss_fct(selected_hidden_states_latentend, selected_lvr_embeds_latentend)
+        selected_slvr_embeds = selected_slvr_embeds.to(torch.float32)
+        selected_slvr_embeds_latentend = self.slvr_latent_end_emb.unsqueeze(0).expand_as(selected_hidden_states_latentend).to(torch.float32)
+        selected_slvr_embeds_latentend = selected_slvr_embeds_latentend.to(selected_hidden_states_latentend.device)
+        # Compute SLVR loss between predicted and inserted slvr embeddings
+        loss_slvr = slvr_loss_fct(selected_hidden_states, selected_slvr_embeds) 
+        loss_mode_switch = mode_switch_loss_fct(selected_hidden_states_latentend, selected_slvr_embeds_latentend)
 
 
     if not return_dict:
@@ -1622,7 +1622,7 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_with_latentEndToken(
     return Qwen2_5_VLCausalLMOutputWithPast(
         # loss=loss,
         loss_ce=loss_ce,
-        loss_lvr=loss_lvr,
+        loss_slvr=loss_slvr,
         loss_mode_switch=loss_mode_switch,
         logits=logits,
         past_key_values=outputs.past_key_values,
@@ -1636,10 +1636,10 @@ def qwen2_5_mixed_modality_forward_lvr_with_head_with_latentEndToken(
 
 '''
     Coconut mode
-    LVR Head
-    Padded <LVR_end> latent token as the mode switching signal
+    SLVR Head
+    Padded <SLVR_end> latent token as the mode switching signal
 '''
-def qwen2_5_mixed_modality_forward_lvr_with_latentEndToken(
+def qwen2_5_mixed_modality_forward_slvr_with_latentEndToken(
     self,
     input_ids: torch.LongTensor = None,
     attention_mask: Optional[torch.Tensor] = None,
@@ -1658,8 +1658,8 @@ def qwen2_5_mixed_modality_forward_lvr_with_latentEndToken(
     rope_deltas: Optional[torch.LongTensor] = None,
     cache_position: Optional[torch.LongTensor] = None,
     second_per_grid_ts: Optional[torch.Tensor] = None,
-    lvr_tokens: Optional[torch.Tensor] = None,      # This is for TRAINING: Where should the lvr img tokens be
-    lvr_mode_switch: Optional[torch.Tensor] = None, # This is for INFERENCE: Which instance in the batch is in lvr mode
+    slvr_tokens: Optional[torch.Tensor] = None,      # This is for TRAINING: Where should the slvr img tokens be
+    slvr_mode_switch: Optional[torch.Tensor] = None, # This is for INFERENCE: Which instance in the batch is in slvr mode
     last_position_hidden_state: Optional[torch.FloatTensor] = None, # This is for INFERENCE: last hidden state of the last position
 ) -> Union[Tuple, Qwen2_5_VLCausalLMOutputWithPast]:
     
@@ -1677,13 +1677,13 @@ def qwen2_5_mixed_modality_forward_lvr_with_latentEndToken(
         only happen during inference 
         inputs_embeds in shape (bs, seq_len, hidden)
     '''
-    if lvr_mode_switch:
+    if slvr_mode_switch:
         # in fact, each instance's seq_len will be 1 in inference
-        inputs_embeds[lvr_mode_switch,-1,:] = last_position_hidden_state[lvr_mode_switch]
+        inputs_embeds[slvr_mode_switch,-1,:] = last_position_hidden_state[slvr_mode_switch]
     
     ''' Only necessary in training '''
     # Pass dummy image and dummy grid to the visual model to avoid deepspeed error.
-    if not lvr_mode_switch and (pixel_values is None and pixel_values_videos is None):
+    if not slvr_mode_switch and (pixel_values is None and pixel_values_videos is None):
         # Create dummy pixel_values and grid_thw for avoiding deepspeed error.
         dummy_pixel = torch.zeros(784, 1176).to(self.model.visual.device)
         dummy_grid = torch.tensor([[1, 28, 28]]).to(self.model.visual.device)
@@ -1730,45 +1730,45 @@ def qwen2_5_mixed_modality_forward_lvr_with_latentEndToken(
         image_embeds = image_embeds.to(inputs_embeds.device, inputs_embeds.dtype)
         inputs_embeds = inputs_embeds.masked_scatter(image_mask_unsqueeze, image_embeds)
 
-        # IN TRAINING should we fill the lvr token positions with selected img tokrnd
-        if lvr_tokens:
+        # IN TRAINING should we fill the slvr token positions with selected img tokrnd
+        if slvr_tokens:
             '''
-                Filling the lvr tokens with image embeddings.
+                Filling the slvr tokens with image embeddings.
                 Applicable when each image input has multiple bboxes
             '''
             total_tokens = torch.sum(image_mask, dim=1)   # 1d tensor([216, 234, 234, 234]) for #vis_tokens in each instance in batch
             batch_size = input_ids.size(0) 
-            # lvr mask for lvr token locations in the batch, [bs, seq_length]
-            # in each instance, lvr tokens are True, others are False
-            lvr_mask = input_ids == self.config.lvr_id  
-            # Total length = number of <lvr> tokens in the batch
-            # seq_positions: flattend LOCAL positions of lvr tokens in the inputs_ids
-            batch_indices, seq_positions = torch.nonzero(lvr_mask, as_tuple=True)  
+            # slvr mask for slvr token locations in the batch, [bs, seq_length]
+            # in each instance, slvr tokens are True, others are False
+            slvr_mask = input_ids == self.config.slvr_id  
+            # Total length = number of <slvr> tokens in the batch
+            # seq_positions: flattend LOCAL positions of slvr tokens in the inputs_ids
+            batch_indices, seq_positions = torch.nonzero(slvr_mask, as_tuple=True)  
 
         #  GLOBAL starting index in `image_embeds` of each image in the batch
             image_token_offsets = torch.cumsum(
                 F.pad(total_tokens, (1, 0)), dim=0
             )[:-1]  # shape [B], offset into image_embeds for each batch element
 
-            global_lvr_token_indices = []
+            global_slvr_token_indices = []
 
-            for b, lvr_ids in enumerate(lvr_tokens):
+            for b, slvr_ids in enumerate(slvr_tokens):
                 # Convert local to global index
                 offset = image_token_offsets[b].item()
-                global_lvr_token_indices.append(lvr_ids + offset)
-            global_lvr_token_indices = torch.cat(global_lvr_token_indices, dim=0)  # [L_total]
+                global_slvr_token_indices.append(slvr_ids + offset)
+            global_slvr_token_indices = torch.cat(global_slvr_token_indices, dim=0)  # [L_total]
 
             # Step 3: Gather the selected visual embeddings
-            selected_lvr_embeds = image_embeds[global_lvr_token_indices]  # [L_total, H]
+            selected_slvr_embeds = image_embeds[global_slvr_token_indices]  # [L_total, H]
 
             # Step 4: Replace in input_embeds at the right batch and position
-            inputs_embeds[batch_indices, seq_positions] = selected_lvr_embeds
+            inputs_embeds[batch_indices, seq_positions] = selected_slvr_embeds
 
-            '''Apply lvr_latent_end_token'''
-            lvr_latent_end_mask = (input_ids == self.config.lvr_latent_end_id)
-            batch_indices_latentend, seq_positions_latentend = torch.nonzero(lvr_latent_end_mask, as_tuple=True)
-            if lvr_latent_end_mask.any():
-                inputs_embeds[lvr_latent_end_mask] = self.lvr_latent_end_emb.to(inputs_embeds.device)
+            '''Apply slvr_latent_end_token'''
+            slvr_latent_end_mask = (input_ids == self.config.slvr_latent_end_id)
+            batch_indices_latentend, seq_positions_latentend = torch.nonzero(slvr_latent_end_mask, as_tuple=True)
+            if slvr_latent_end_mask.any():
+                inputs_embeds[slvr_latent_end_mask] = self.slvr_latent_end_emb.to(inputs_embeds.device)
             
 
     if attention_mask is not None:
@@ -1824,12 +1824,12 @@ def qwen2_5_mixed_modality_forward_lvr_with_latentEndToken(
     last_position_hidden_state = outputs.last_hidden_state[:,-1,:]
     logits = self.lm_head(hidden_states)
 
-    lvr_loss_fct = set_lvr_loss_fct(self.config.loss_lvr_fct)
-    mode_switch_loss_fct = set_lvr_loss_fct(self.config.loss_mode_switch_fct)
+    slvr_loss_fct = set_slvr_loss_fct(self.config.loss_slvr_fct)
+    mode_switch_loss_fct = set_slvr_loss_fct(self.config.loss_mode_switch_fct)
 
     loss = None
     loss_ce = None
-    loss_lvr = None
+    loss_slvr = None
     if labels is not None:
         # Upcast to float if we need to compute the loss to avoid potential precision issues
         logits = logits.float()
@@ -1840,28 +1840,28 @@ def qwen2_5_mixed_modality_forward_lvr_with_latentEndToken(
         loss_fct = CrossEntropyLoss()
         shift_logits = shift_logits.view(-1, self.config.vocab_size)
         shift_labels = shift_labels.view(-1)
-        # Don't want CE loss for <lvr> token
-        shift_labels = shift_labels.masked_fill((shift_labels == self.config.lvr_id)|(shift_labels == self.config.lvr_latent_end_id), IGNORE_INDEX)
+        # Don't want CE loss for <slvr> token
+        shift_labels = shift_labels.masked_fill((shift_labels == self.config.slvr_id)|(shift_labels == self.config.slvr_latent_end_id), IGNORE_INDEX)
 
         # Enable model parallelism
         shift_labels = shift_labels.to(shift_logits.device)
         loss_ce = loss_fct(shift_logits, shift_labels)
 
-        # lvr loss
-        # Get last hidden states for <lvr> token positions
+        # slvr loss
+        # Get last hidden states for <slvr> token positions
         seq_positions_start = seq_positions - 1
         selected_hidden_states = hidden_states[batch_indices, seq_positions_start].to(torch.float32)  # [L_total, H]
-        # Get last hidden states for <lvr_latent_end> token positions
+        # Get last hidden states for <slvr_latent_end> token positions
         seq_positions_start_latentend = seq_positions_latentend - 1
         selected_hidden_states_latentend = hidden_states[batch_indices_latentend, seq_positions_start_latentend].to(torch.float32)  # [L_total, H]
 
         ''' We need to convert to fp32 to avoid overflow by mse'''
-        selected_lvr_embeds = selected_lvr_embeds.to(torch.float32)
-        selected_lvr_embeds_latentend = self.lvr_latent_end_emb.unsqueeze(0).expand_as(selected_hidden_states_latentend).to(torch.float32)
-        selected_lvr_embeds_latentend = selected_lvr_embeds_latentend.to(selected_hidden_states_latentend.device)
-        # Compute LVR loss between predicted and inserted lvr embeddings
-        loss_lvr = lvr_loss_fct(selected_hidden_states, selected_lvr_embeds) 
-        loss_mode_switch = mode_switch_loss_fct(selected_hidden_states_latentend, selected_lvr_embeds_latentend)
+        selected_slvr_embeds = selected_slvr_embeds.to(torch.float32)
+        selected_slvr_embeds_latentend = self.slvr_latent_end_emb.unsqueeze(0).expand_as(selected_hidden_states_latentend).to(torch.float32)
+        selected_slvr_embeds_latentend = selected_slvr_embeds_latentend.to(selected_hidden_states_latentend.device)
+        # Compute SLVR loss between predicted and inserted slvr embeddings
+        loss_slvr = slvr_loss_fct(selected_hidden_states, selected_slvr_embeds) 
+        loss_mode_switch = mode_switch_loss_fct(selected_hidden_states_latentend, selected_slvr_embeds_latentend)
 
 
     if not return_dict:
@@ -1871,7 +1871,7 @@ def qwen2_5_mixed_modality_forward_lvr_with_latentEndToken(
     return Qwen2_5_VLCausalLMOutputWithPast(
         # loss=loss,
         loss_ce=loss_ce,
-        loss_lvr=loss_lvr,
+        loss_slvr=loss_slvr,
         loss_mode_switch=loss_mode_switch,
         logits=logits,
         past_key_values=outputs.past_key_values,
@@ -1887,7 +1887,7 @@ def qwen2_5_mixed_modality_forward_lvr_with_latentEndToken(
     Kinda messy since in this stage, the transofmers will be 4.51.3 < 4.54 in stage I
     Will fix this inconsistency in final release
 """
-def qwen2_5_mixed_modality_forward_lvr_rl(
+def qwen2_5_mixed_modality_forward_slvr_rl(
     self,
     input_ids: torch.LongTensor = None,
     attention_mask: Optional[torch.Tensor] = None,
@@ -1906,10 +1906,10 @@ def qwen2_5_mixed_modality_forward_lvr_rl(
     rope_deltas: Optional[torch.LongTensor] = None,
     cache_position: Optional[torch.LongTensor] = None,
     second_per_grid_ts: Optional[torch.Tensor] = None,
-    lvr_mode_switch: Optional[torch.Tensor] = None, # This is for INFERENCE: Which instance in the batch is in lvr mode
+    slvr_mode_switch: Optional[torch.Tensor] = None, # This is for INFERENCE: Which instance in the batch is in slvr mode
     last_position_hidden_state: Optional[torch.FloatTensor] = None, # This is for INFERENCE: last hidden state of the last position
 ) -> Union[Tuple, Qwen2_5_VLCausalLMOutputWithPast]:
-    '''In this mode, no lvr_tokens'''
+    '''In this mode, no slvr_tokens'''
     output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
     output_hidden_states = (
         output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -1926,11 +1926,11 @@ def qwen2_5_mixed_modality_forward_lvr_rl(
     '''
     if last_position_hidden_state is not None:
         # in fact, each instance's seq_len will be 1 in inference
-        inputs_embeds[lvr_mode_switch,-1,:] = last_position_hidden_state[lvr_mode_switch]
+        inputs_embeds[slvr_mode_switch,-1,:] = last_position_hidden_state[slvr_mode_switch]
     
     ''' Only necessary in training '''
     # Pass dummy image and dummy grid to the visual model to avoid deepspeed error.
-    if not lvr_mode_switch and (pixel_values is None and pixel_values_videos is None):
+    if not slvr_mode_switch and (pixel_values is None and pixel_values_videos is None):
         # Create dummy pixel_values and grid_thw for avoiding deepspeed error.
         dummy_pixel = torch.zeros(784, 1176).to(self.model.visual.device)
         dummy_grid = torch.tensor([[1, 28, 28]]).to(self.model.visual.device)
@@ -2027,11 +2027,11 @@ def qwen2_5_mixed_modality_forward_lvr_rl(
         cache_position=cache_position,
     )
 
-    # check if there is lvr_head
-    if self.config.lvr_head:
-        '''apply lvr_head in _inference mode'''
-        if lvr_mode_switch is not None:
-            outputs.last_hidden_state[lvr_mode_switch,:,:] = self.lvr_head(outputs.last_hidden_state[lvr_mode_switch,:,:])
+    # check if there is slvr_head
+    if self.config.slvr_head:
+        '''apply slvr_head in _inference mode'''
+        if slvr_mode_switch is not None:
+            outputs.last_hidden_state[slvr_mode_switch,:,:] = self.slvr_head(outputs.last_hidden_state[slvr_mode_switch,:,:])
 
     hidden_states = outputs[0]
     last_position_hidden_state = outputs.last_hidden_state[:,-1,:]
@@ -2039,7 +2039,7 @@ def qwen2_5_mixed_modality_forward_lvr_rl(
 
     loss = None
     loss_ce = None
-    loss_lvr = None
+    loss_slvr = None
     if labels is not None:
         # Upcast to float if we need to compute the loss to avoid potential precision issues
         logits = logits.float()
@@ -2050,15 +2050,15 @@ def qwen2_5_mixed_modality_forward_lvr_rl(
         loss_fct = CrossEntropyLoss()
         shift_logits = shift_logits.view(-1, self.config.vocab_size)
         shift_labels = shift_labels.view(-1)
-        # Don't want CE loss for <lvr> token
-        shift_labels = shift_labels.masked_fill(shift_labels == self.config.lvr_id, IGNORE_INDEX)
+        # Don't want CE loss for <slvr> token
+        shift_labels = shift_labels.masked_fill(shift_labels == self.config.slvr_id, IGNORE_INDEX)
 
         # Enable model parallelism
         shift_labels = shift_labels.to(shift_logits.device)
         loss_ce = loss_fct(shift_logits, shift_labels)
 
-        # No lvr loss in this mode
-        loss_lvr = None
+        # No slvr loss in this mode
+        loss_slvr = None
 
 
     if not return_dict:
@@ -2068,7 +2068,7 @@ def qwen2_5_mixed_modality_forward_lvr_rl(
     return Qwen2_5_VLCausalLMOutputWithPast(
         # loss=loss,
         loss_ce=loss_ce,
-        loss_lvr=loss_lvr,
+        loss_slvr=loss_slvr,
         logits=logits,
         past_key_values=outputs.past_key_values,
         hidden_states=outputs.hidden_states,
@@ -2084,7 +2084,7 @@ def qwen2_5_mixed_modality_forward_lvr_rl(
 
 
 '''Liger kernel'''
-# def qwen2_5_mixed_modality_forward_lvr_with_flce(
+# def qwen2_5_mixed_modality_forward_slvr_with_flce(
 #     self,
 #     input_ids: torch.LongTensor = None,
 #     attention_mask: Optional[torch.Tensor] = None,
@@ -2103,7 +2103,7 @@ def qwen2_5_mixed_modality_forward_lvr_rl(
 #     rope_deltas: Optional[torch.LongTensor] = None,
 #     cache_position: Optional[torch.LongTensor] = None,
 #     second_per_grid_ts: Optional[torch.Tensor] = None,
-#     lvr_tokens: Optional[torch.Tensor] = None,
+#     slvr_tokens: Optional[torch.Tensor] = None,
 # ) -> Union[Tuple, Qwen2_5_VLCausalLMOutputWithPast]:
 
 #     output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
@@ -2146,38 +2146,38 @@ def qwen2_5_mixed_modality_forward_lvr_rl(
 #             image_embeds = image_embeds.to(inputs_embeds.device, inputs_embeds.dtype)
 #             inputs_embeds = inputs_embeds.masked_scatter(image_mask, image_embeds)
 #             '''
-#                 Filling the lvr tokens with image embeddings.
+#                 Filling the slvr tokens with image embeddings.
 #                 Applicable when each image input has multiple bboxes
 #             '''
 #             total_tokens = torch.sum(mask, dim=1)   # 1d tensor([216, 234, 234, 234]) for #vis_tokens in each instance in batch
 #             batch_size = input_ids.size(0) 
-#             # lvr mask for lvr token locations in the batch, [bs, seq_length]
-#             # in each instance, lvr tokens are True, others are False
-#             lvr_mask = input_ids == self.config.lvr_id  
-#             # Total length = number of <lvr> tokens in the batch
-#             # seq_positions: flattend LOCAL positions of lvr tokens in the inputs_ids
-#             batch_indices, seq_positions = torch.nonzero(lvr_mask, as_tuple=True)  
+#             # slvr mask for slvr token locations in the batch, [bs, seq_length]
+#             # in each instance, slvr tokens are True, others are False
+#             slvr_mask = input_ids == self.config.slvr_id  
+#             # Total length = number of <slvr> tokens in the batch
+#             # seq_positions: flattend LOCAL positions of slvr tokens in the inputs_ids
+#             batch_indices, seq_positions = torch.nonzero(slvr_mask, as_tuple=True)  
 
 #            #  GLOBAL starting index in `image_embeds` of each image in the batch
 #             image_token_offsets = torch.cumsum(
 #                 F.pad(total_tokens, (1, 0)), dim=0
 #             )[:-1]  # shape [B], offset into image_embeds for each batch element
 
-#             global_lvr_token_indices = []
+#             global_slvr_token_indices = []
 
-#             for b, lvr_ids in enumerate(lvr_tokens):
+#             for b, slvr_ids in enumerate(slvr_tokens):
 #                 # Convert local to global index
 #                 offset = image_token_offsets[b].item()
-#                 global_lvr_token_indices.append(lvr_ids + offset)
-#             global_lvr_token_indices = torch.cat(global_lvr_token_indices, dim=0)  # [L_total]
+#                 global_slvr_token_indices.append(slvr_ids + offset)
+#             global_slvr_token_indices = torch.cat(global_slvr_token_indices, dim=0)  # [L_total]
 
 #             # Step 3: Gather the selected visual embeddings
-#             selected_lvr_embeds = image_embeds[global_lvr_token_indices]  # [L_total, H]
+#             selected_slvr_embeds = image_embeds[global_slvr_token_indices]  # [L_total, H]
 
 #             # Step 4: Replace in input_embeds at the right batch and position
 #             # Prepare indexing
 #             # replaced_embeds = inputs_embeds.clone()
-#             inputs_embeds[batch_indices, seq_positions] = selected_lvr_embeds
+#             inputs_embeds[batch_indices, seq_positions] = selected_slvr_embeds
 
 
 
@@ -2244,12 +2244,12 @@ def qwen2_5_mixed_modality_forward_lvr_rl(
 
 #     hidden_states = outputs[0]
 
-#     lvr_loss_fct = set_lvr_loss_fct(self.config.loss_lvr_fct)
+#     slvr_loss_fct = set_slvr_loss_fct(self.config.loss_slvr_fct)
 
 
 #     loss = None
 #     loss_ce = None
-#     loss_lvr = None
+#     loss_slvr = None
 #     logits = None
 
 #     if self.training and (labels is not None):
@@ -2259,19 +2259,19 @@ def qwen2_5_mixed_modality_forward_lvr_rl(
 #         # Flatten tokens
 #         shift_hidden_states = shift_hidden_states.view(-1, self.config.hidden_size)
 #         shift_labels = shift_labels.view(-1)
-#         # Don't want CE loss for <lvr> token
-#         shift_labels = shift_labels.masked_fill(shift_labels == self.config.lvr_id, IGNORE_INDEX)
+#         # Don't want CE loss for <slvr> token
+#         shift_labels = shift_labels.masked_fill(shift_labels == self.config.slvr_id, IGNORE_INDEX)
 
 #         lce = LigerFusedLinearCrossEntropyLoss()
 #         loss_ce = lce(self.lm_head.weight, shift_hidden_states, shift_labels)
 
         
-#         # lvr loss
-#         # Get last hidden states for <lvr> token positions
+#         # slvr loss
+#         # Get last hidden states for <slvr> token positions
 #         seq_positions_start = seq_positions - 1  # Now points to vision_start
 #         selected_hidden_states = hidden_states[batch_indices, seq_positions_start]  # [L_total, H]
-#         # Compute LVR loss between predicted and inserted lvr embeddings
-#         loss_lvr = lvr_loss_fct(selected_hidden_states, selected_lvr_embeds)
+#         # Compute SLVR loss between predicted and inserted slvr embeddings
+#         loss_slvr = slvr_loss_fct(selected_hidden_states, selected_slvr_embeds)
 #     else:
 #         logits = self.lm_head(hidden_states)
 #         if labels is not None:
@@ -2284,18 +2284,18 @@ def qwen2_5_mixed_modality_forward_lvr_rl(
 #             loss_fct = CrossEntropyLoss()
 #             shift_logits = shift_logits.view(-1, self.config.vocab_size)
 #             shift_labels = shift_labels.view(-1)
-#             # Don't want CE loss for <lvr> token
-#             shift_labels = shift_labels.masked_fill(shift_labels == self.config.lvr_id, IGNORE_INDEX)
+#             # Don't want CE loss for <slvr> token
+#             shift_labels = shift_labels.masked_fill(shift_labels == self.config.slvr_id, IGNORE_INDEX)
 #             # Enable model parallelism
 #             shift_labels = shift_labels.to(shift_logits.device)
 #             loss_ce = loss_fct(shift_logits, shift_labels)
 
-#             # lvr loss
-#             # Get last hidden states for <lvr> token positions
+#             # slvr loss
+#             # Get last hidden states for <slvr> token positions
 #             seq_positions_start = seq_positions - 1  # Now points to vision_start
 #             selected_hidden_states = hidden_states[batch_indices, seq_positions_start]  # [L_total, H]
-#             # Compute LVR loss between predicted and inserted lvr embeddings
-#             loss_lvr = lvr_loss_fct(selected_hidden_states, selected_lvr_embeds)
+#             # Compute SLVR loss between predicted and inserted slvr embeddings
+#             loss_slvr = slvr_loss_fct(selected_hidden_states, selected_slvr_embeds)
 
 #     if not return_dict:
 #         output = (logits,) + outputs[1:]
@@ -2304,7 +2304,7 @@ def qwen2_5_mixed_modality_forward_lvr_rl(
 #     return Qwen2_5_VLCausalLMOutputWithPast(
 #         loss=loss,
 #         loss_ce=loss_ce,
-#         loss_lvr=loss_lvr,
+#         loss_slvr=loss_slvr,
 #         past_key_values=outputs.past_key_values,
 #         hidden_states=outputs.hidden_states,
 #         attentions=outputs.attentions,

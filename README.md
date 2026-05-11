@@ -1,6 +1,6 @@
-# SLVR: Semantic-Enriched Latent Visual Reasoning (ICML 2026)
+# SSLVR: Semantic-Enriched Latent Visual Reasoning (ICML 2026)
 
-Official training and inference code for **SLVR**, accepted at ICML 2026.
+Official training and inference code for **SSLVR**, accepted at ICML 2026.
 
 ---
 
@@ -17,7 +17,7 @@ Official training and inference code for **SLVR**, accepted at ICML 2026.
 
 ```bash
 conda env create -f environment.yaml
-conda activate slvr
+conda activate sslvr
 pip install qwen-vl-utils
 pip install flash-attn --no-build-isolation
 ```
@@ -101,7 +101,7 @@ export MODEL_NAME="Qwen/Qwen2.5-VL-7B-Instruct"
 export DATA_PATH="$(pwd)/meta_viscot.json"
 export OUTPUT_DIR="stage1_checkpoints"
 
-bash scripts/finetune_lvr_stage1_7b_viscot.sh
+bash scripts/finetune_slvr_stage1_7b_viscot.sh
 ```
 
 ### Stage-2: M-GRPO
@@ -117,7 +117,7 @@ export OUTPUT_DIR="stage2_mgrpo_checkpoints"
 export MGRPO_JUDGE_BROKER_URL="http://your-broker-host:port/api"
 export MGRPO_JUDGE_BROKER_APPID="your-judge-appid"
 
-bash scripts/finetune_lvr_stage2_7b_mgrpo_viscot.sh
+bash scripts/finetune_slvr_stage2_7b_mgrpo_viscot.sh
 ```
 
 ---
@@ -132,7 +132,7 @@ The inference script is `inf_batch_dir_old.py`. Edit the `Config` class at the t
 | `INPUT_DIR` | Directory of input JSON files (scanned recursively for `*.json`) |
 | `OUTPUT_DIR` | Directory to write results |
 | `STEPS` | Number of latent reasoning steps (default: `8`) |
-| `DECODING_STRATEGY` | Set to `"latent"` for SLVR-style inference |
+| `DECODING_STRATEGY` | Set to `"latent"` for SSLVR-style inference |
 | `BATCH_SIZE` | Batch size (can also be set via environment variable) |
 
 The script auto-detects available GPUs and falls back gracefully on OOM.
@@ -148,7 +148,7 @@ python inf_batch_dir_old.py
 If you find this work useful, please cite our paper:
 
 ```bibtex
-@inproceedings{slvr2026,
+@inproceedings{sslvr2026,
   title     = {Semantic-Enriched Latent Visual Reasoning},
   booktitle = {Proceedings of the 43rd International Conference on Machine Learning (ICML)},
   year      = {2026},

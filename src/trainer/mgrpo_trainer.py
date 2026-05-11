@@ -3,7 +3,7 @@ M-GRPO Trainer: Multi-query Group Relative Policy Optimization.
 
 Key differences from QwenGRPO2QTrainer:
   1. Correct latent extraction:
-     - visual latents  : hidden states at <|lvr|> token positions
+     - visual latents  : hidden states at <|slvr|> token positions
                          (strictly between <|vision_start|> and the LAST <|vision_end|>)
      - semantic latent : hidden state at <|sem|> token position
                          (strictly between <sem> and </sem>)
@@ -34,7 +34,7 @@ from transformers import PreTrainedModel
 
 from src.constants import MULTIMODAL_KEYWORDS
 from qwen_vl_utils import process_vision_info
-from src.train.monkey_patch_forward_lvr import replace_qwen2_5_with_mixed_modality_forward_lvr
+from src.train.monkey_patch_forward_slvr import replace_qwen2_5_with_mixed_modality_forward_slvr
 from src.trainer.qq_grpo_trainer import (
     QwenGRPO2QTrainer,
     nanstd,
@@ -60,14 +60,14 @@ def _extract_answer(text: str) -> str:
 def _extract_latents_from_hidden(
     hidden_states,   # (B, seq_len, H)
     token_ids,       # (B, seq_len)
-    lvr_start_id, lvr_end_id, lvr_token_id,
-    lvr_text_start_id, lvr_text_end_id, lvr_text_token_id,
+    slvr_start_id, slvr_end_id, slvr_token_id,
+    slvr_text_start_id, slvr_text_end_id, slvr_text_token_id,
 ):
     """
     Extract visual latents and semantic latent from last hidden states.
 
     Visual:  collect hidden[t] for ALL positions strictly between <|vision_start|>
-             and the first <sem>.  In _lvr_deocding_with_latentend
+             and the first <sem>.  In _slvr_deocding_with_latentend
              mode the token IDs in this span are all <|vision_end|> placeholders;
              the actual latent reasoning signal is entirely in the hidden states,
              so we collect every position regardless of its token ID.
@@ -95,33 +95,33 @@ def _extract_latents_from_hidden(
         hs  = hidden_states[b]
 
         # ---- Locate span boundaries ----
-        lvr_start_pos  = None
-        lvr_ts_pos     = None   # <sem>
-        lvr_te_pos     = None   # </sem>
+        slvr_start_pos  = None
+        slvr_ts_pos     = None   # <sem>
+        slvr_te_pos     = None   # </sem>
         for t in range(seq_len):
             tok = ids[t].item()
-            if tok == lvr_start_id and lvr_start_pos is None:
-                lvr_start_pos = t
-            if tok == lvr_text_start_id and lvr_ts_pos is None:
-                lvr_ts_pos = t
-            if tok == lvr_text_end_id and lvr_ts_pos is not None and lvr_te_pos is None:
-                lvr_te_pos = t
+            if tok == slvr_start_id and slvr_start_pos is None:
+                slvr_start_pos = t
+            if tok == slvr_text_start_id and slvr_ts_pos is None:
+                slvr_ts_pos = t
+            if tok == slvr_text_end_id and slvr_ts_pos is not None and slvr_te_pos is None:
+                slvr_te_pos = t
 
         # ---- Visual latent: ALL hidden states in (vision_start, sem_start) ----
         # Token IDs in this span are placeholder <|vision_end|>s; we ignore them
         # and collect every position's last-layer hidden state.
         vis_hs = []
-        if lvr_start_pos is not None and lvr_ts_pos is not None and lvr_ts_pos > lvr_start_pos + 1:
-            for t in range(lvr_start_pos + 1, lvr_ts_pos):
+        if slvr_start_pos is not None and slvr_ts_pos is not None and slvr_ts_pos > slvr_start_pos + 1:
+            for t in range(slvr_start_pos + 1, slvr_ts_pos):
                 vis_hs.append(hs[t])
 
         # ---- Semantic latent: ALL hidden states in (sem_start, sem_end) ----
         # Mean-pool across the span to get a single (H,) vector.
         sem_hs = None
-        if lvr_ts_pos is not None:
-            te_bound = lvr_te_pos if lvr_te_pos is not None else min(lvr_ts_pos + 9, seq_len)
-            if te_bound > lvr_ts_pos + 1:
-                span = hs[lvr_ts_pos + 1 : te_bound]   # (T_sem, H)
+        if slvr_ts_pos is not None:
+            te_bound = slvr_te_pos if slvr_te_pos is not None else min(slvr_ts_pos + 9, seq_len)
+            if te_bound > slvr_ts_pos + 1:
+                span = hs[slvr_ts_pos + 1 : te_bound]   # (T_sem, H)
                 sem_hs = span.mean(dim=0)               # (H,)
 
         fmt_ok = len(vis_hs) > 0 and sem_hs is not None
@@ -168,7 +168,7 @@ class QwenMGRPOTrainer(QwenGRPO2QTrainer):
         self.lambda_stability    = getattr(self.args, 'lambda_stability',    0.05)
         self.max_sem_pen         = float(os.getenv("MGRPO_MAX_SEM_PEN", "1.0"))
         self.max_vis_pen         = float(os.getenv("MGRPO_MAX_VIS_PEN", "1.0"))
-        self._lvr_ids_cache = None
+        self._slvr_ids_cache = None
 
         # Reward log dir
         self._reward_log_dir = os.path.join(self.args.output_dir, "reward_logs")
@@ -186,18 +186,18 @@ class QwenMGRPOTrainer(QwenGRPO2QTrainer):
     # Token-ID helpers
     # ------------------------------------------------------------------
 
-    def _get_lvr_ids(self):
-        if self._lvr_ids_cache is None:
+    def _get_slvr_ids(self):
+        if self._slvr_ids_cache is None:
             cfg = self.accelerator.unwrap_model(self.model).config
-            self._lvr_ids_cache = dict(
-                lvr_start_id      = cfg.lvr_start_id,
-                lvr_end_id        = cfg.lvr_end_id,
-                lvr_token_id      = cfg.lvr_id,
-                lvr_text_start_id = cfg.lvr_text_start_id,
-                lvr_text_end_id   = cfg.lvr_text_end_id,
-                lvr_text_token_id = cfg.lvr_text_id,
+            self._slvr_ids_cache = dict(
+                slvr_start_id      = cfg.slvr_start_id,
+                slvr_end_id        = cfg.slvr_end_id,
+                slvr_token_id      = cfg.slvr_id,
+                slvr_text_start_id = cfg.slvr_text_start_id,
+                slvr_text_end_id   = cfg.slvr_text_end_id,
+                slvr_text_token_id = cfg.slvr_text_id,
             )
-        return self._lvr_ids_cache
+        return self._slvr_ids_cache
 
     # ------------------------------------------------------------------
     # Latent extraction
@@ -236,7 +236,7 @@ class QwenMGRPOTrainer(QwenGRPO2QTrainer):
         hidden = _captured.get('h')
         if hidden is None:
             raise RuntimeError("[M-GRPO] _extract_latents: lm_head hook did not fire")
-        ids = self._get_lvr_ids()
+        ids = self._get_slvr_ids()
         return _extract_latents_from_hidden(hidden, prompt_completion_ids, **ids)
 
     # ------------------------------------------------------------------
@@ -408,13 +408,13 @@ class QwenMGRPOTrainer(QwenGRPO2QTrainer):
             gather_deepspeed3_params=self.args.ds3_gather_for_generation,
         ) as unwrapped_model:
             model_cfg = unwrapped_model.config
-            lvr_head_enabled = bool(getattr(model_cfg, "lvr_head", False))
+            slvr_head_enabled = bool(getattr(model_cfg, "slvr_head", False))
             latent_end_enabled = bool(getattr(model_cfg, "latent_end_token", False))
             was_training = unwrapped_model.training
             unwrapped_model.eval()
-            replace_qwen2_5_with_mixed_modality_forward_lvr(
+            replace_qwen2_5_with_mixed_modality_forward_slvr(
                 inference_mode=True,
-                lvr_head=lvr_head_enabled,
+                slvr_head=slvr_head_enabled,
             )
             try:
                 with torch.no_grad():
@@ -423,10 +423,10 @@ class QwenMGRPOTrainer(QwenGRPO2QTrainer):
                         generation_config=self.generation_config,
                     )
             finally:
-                replace_qwen2_5_with_mixed_modality_forward_lvr(
+                replace_qwen2_5_with_mixed_modality_forward_slvr(
                     inference_mode=False,
                     rl=True,
-                    lvr_head=lvr_head_enabled,
+                    slvr_head=slvr_head_enabled,
                     latent_end_token=latent_end_enabled,
                 )
                 if was_training:
@@ -458,7 +458,7 @@ class QwenMGRPOTrainer(QwenGRPO2QTrainer):
             "num_infer_queries": len(rows),
             "sampled_indices": sampled_indices,
             "decoding_strategy": getattr(self.generation_config, "decoding_strategy", None),
-            "lvr_steps": getattr(self.generation_config, "lvr_steps", None),
+            "slvr_steps": getattr(self.generation_config, "slvr_steps", None),
             "records": rows,
         }
         try:
@@ -476,8 +476,8 @@ class QwenMGRPOTrainer(QwenGRPO2QTrainer):
         device = self.accelerator.device
         mode = "eval" if self.control.should_evaluate else "train"
         num_questions = 2
-        self._get_lvr_ids()
-        lvr_ids = self._lvr_ids_cache
+        self._get_slvr_ids()
+        slvr_ids = self._slvr_ids_cache
 
         # ---- Build prompts ----
         prompts = [x["prompt"] for x in inputs]
@@ -565,14 +565,14 @@ class QwenMGRPOTrainer(QwenGRPO2QTrainer):
             gather_deepspeed3_params=self.args.ds3_gather_for_generation
         ) as unwrapped_model:
             model_cfg = unwrapped_model.config
-            lvr_head_enabled = bool(getattr(model_cfg, "lvr_head", False))
+            slvr_head_enabled = bool(getattr(model_cfg, "slvr_head", False))
             latent_end_enabled = bool(getattr(model_cfg, "latent_end_token", False))
             was_training = unwrapped_model.training
             unwrapped_model.eval()
             # Keep rollout generation path identical to old inference behavior.
-            replace_qwen2_5_with_mixed_modality_forward_lvr(
+            replace_qwen2_5_with_mixed_modality_forward_slvr(
                 inference_mode=True,
-                lvr_head=lvr_head_enabled,
+                slvr_head=slvr_head_enabled,
             )
             try:
                 with torch.no_grad():
@@ -610,9 +610,9 @@ class QwenMGRPOTrainer(QwenGRPO2QTrainer):
                                 eos_token_id=self.processing_class.tokenizer.eos_token_id,
                                 pad_token_id=self.processing_class.tokenizer.pad_token_id,
                                 decoding_strategy=getattr(self.generation_config, "decoding_strategy", "latent"),
-                                lvr_steps=[getattr(self.generation_config, "lvr_steps", 8)],
+                                slvr_steps=[getattr(self.generation_config, "slvr_steps", 8)],
                                 criterion=getattr(self.generation_config, "criterion", "mse"),
-                                lvr_end_threshold=getattr(self.generation_config, "lvr_end_threshold", 0.02),
+                                slvr_end_threshold=getattr(self.generation_config, "slvr_end_threshold", 0.02),
                             )
                         probe_trim = [
                             out_ids[len(in_ids):]
@@ -630,10 +630,10 @@ class QwenMGRPOTrainer(QwenGRPO2QTrainer):
                     except Exception as e:
                         probe_info = {"ok": False, "error": str(e)}
             finally:
-                replace_qwen2_5_with_mixed_modality_forward_lvr(
+                replace_qwen2_5_with_mixed_modality_forward_slvr(
                     inference_mode=False,
                     rl=True,
-                    lvr_head=lvr_head_enabled,
+                    slvr_head=slvr_head_enabled,
                     latent_end_token=latent_end_enabled,
                 )
                 if was_training:
@@ -659,36 +659,36 @@ class QwenMGRPOTrainer(QwenGRPO2QTrainer):
         if self.mask_truncated_completions:
             completion_mask = completion_mask * (~(~is_eos.any(1))).unsqueeze(1).int()
 
-        # Mask LVR+LVR_text spans from log-prob loss
-        lvr_token_mask = torch.ones_like(prompt_completion_ids, dtype=torch.bool)
+        # Mask SLVR+SLVR_text spans from log-prob loss
+        slvr_token_mask = torch.ones_like(prompt_completion_ids, dtype=torch.bool)
         for b in range(prompt_completion_ids.size(0)):
             in_vis  = False
             in_text = False
             for t in range(prompt_completion_ids.size(1)):
                 tok = prompt_completion_ids[b, t].item()
-                if tok == lvr_ids['lvr_start_id']:      in_vis  = True
-                elif tok == lvr_ids['lvr_end_id']:      in_vis  = False
-                if tok == lvr_ids['lvr_text_start_id']: in_text = True
-                elif tok == lvr_ids['lvr_text_end_id']: in_text = False
+                if tok == slvr_ids['slvr_start_id']:      in_vis  = True
+                elif tok == slvr_ids['slvr_end_id']:      in_vis  = False
+                if tok == slvr_ids['slvr_text_start_id']: in_text = True
+                elif tok == slvr_ids['slvr_text_end_id']: in_text = False
                 if in_vis or in_text:
-                    lvr_token_mask[b, t] = False
+                    slvr_token_mask[b, t] = False
 
         attention_mask = torch.cat([prompt_mask, completion_mask], dim=1)
-        final_mask     = attention_mask.bool() & lvr_token_mask
+        final_mask     = attention_mask.bool() & slvr_token_mask
 
         logits_to_keep = completion_ids.size(1)
 
         # Log-probs
         def _score(model, ids, mask, ltk, **kw):
-            if getattr(self.generation_config, 'lvr_steps', 0) > 0:
+            if getattr(self.generation_config, 'slvr_steps', 0) > 0:
                 try:
-                    return self.score_with_lvr_replay(
+                    return self.score_with_slvr_replay(
                         model,
                         input_ids=ids[:, :prompt_ids.size(1)],
                         attention_mask=mask[:, :prompt_ids.size(1)],
                         target_ids=ids,
                         generation_config=self.generation_config,
-                        lvr_steps=[self.generation_config.lvr_steps] * ids.size(0),
+                        slvr_steps=[self.generation_config.slvr_steps] * ids.size(0),
                         enable_grad=False,
                         **kw,
                     )
@@ -708,7 +708,7 @@ class QwenMGRPOTrainer(QwenGRPO2QTrainer):
 
                     if self.accelerator.is_main_process:
                         self.accelerator.print(
-                            "[MGRPO][warn] score_with_lvr_replay hit Qwen-VL rope shape mismatch; "
+                            "[MGRPO][warn] score_with_slvr_replay hit Qwen-VL rope shape mismatch; "
                             "falling back to _get_per_token_logps for this step. "
                             f"error={err[:220]}"
                         )
@@ -789,7 +789,7 @@ class QwenMGRPOTrainer(QwenGRPO2QTrainer):
             r_stab = torch.zeros(len(completions), device=device)
 
         # ---- Gate rewards on format / extractability ----
-        # If a sample has no valid LVR format (format_score < 0), the model
+        # If a sample has no valid SLVR format (format_score < 0), the model
         # cannot meaningfully extract a structured answer, so zero out its
         # accuracy reward.  This makes format a hard prerequisite for earning
         # accuracy signal and prevents the bypass strategy from being rewarded.

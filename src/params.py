@@ -11,11 +11,11 @@ class ModelArguments:
     model_id: Optional[str] = field(default="Qwen/Qwen2-VL-7B-Instruct")
     # set continuous reasoning mode
     coconut: bool = field(default=True)
-    lvr_head: bool = field(default=False)
-    lvr_text_head: bool = field(default=False)
-    lvr_head_type: str = field(default="simple")
+    slvr_head: bool = field(default=False)
+    slvr_text_head: bool = field(default=False)
+    slvr_head_type: str = field(default="simple")
     latent_end_token: bool = field(default=False)
-    max_lvr_tokens: int = field(default=None)
+    max_slvr_tokens: int = field(default=None)
 
 
 @dataclass
@@ -26,9 +26,9 @@ class TrainingArguments(HFTrainingArguments):
     adam_beta2: float = field(default=0.999)
     adam_epsilon: float = field(default=1e-8)
 
-    loss_lvr_fct: str = field(default="mse")
-    loss_lvr_lambda: float = field(default=1e-1)
-    loss_lvr_text_lambda: float = field(default=1e-1)
+    loss_slvr_fct: str = field(default="mse")
+    loss_slvr_lambda: float = field(default=1e-1)
+    loss_slvr_text_lambda: float = field(default=1e-1)
 
     freeze_vision_tower: bool = field(default=False)
     freeze_llm: bool = field(default=False)
@@ -65,7 +65,7 @@ class TrainingArguments(HFTrainingArguments):
     lora_bias: str = "none"
     vision_lr: Optional[float] = None
     merger_lr: Optional[float] = None
-    lvr_head_lr: Optional[float] = None
+    slvr_head_lr: Optional[float] = None
     lora_namespan_exclude: str = field(default=None, metadata={"help": "List of namespan to exclude for LoRA"})
     num_lora_modules: int = -1
     # use_liger: bool = True
@@ -140,9 +140,9 @@ class GRPOArguments(GRPOConfigTRL):
     online_checkpoint: Optional[bool] = False
     checkpoint_name:Optional[str] = None
     decoding_strategy:str = "steps"
-    lvr_steps: int = 16
+    slvr_steps: int = 16
     criterion: str = field(default="mse", metadata={"help": "Distance metric for latent-end detection (mse|mae|cosine)."})
-    lvr_end_threshold: float = field(default=0.02, metadata={"help": "Stop latent decoding when latent-end distance falls below this threshold."})
+    slvr_end_threshold: float = field(default=0.02, metadata={"help": "Stop latent decoding when latent-end distance falls below this threshold."})
     loss_mode_switch_fct: str = field(default="mse", metadata={"help": "Loss function type for mode-switch supervision."})
 
     # M-GRPO specific parameters

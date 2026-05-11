@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn import LayerNorm
 
-class LVRHead(nn.Module):
+class SLVRHead(nn.Module):
     """
         The simplest mlp w/o up_proj
     """
@@ -19,7 +19,7 @@ class LVRHead(nn.Module):
         x = self.mlp(self.ln_q(x))
         return x
 
-class LVRTextHead(nn.Module):
+class SLVRTextHead(nn.Module):
     """
         The simplest mlp w/o up_proj
     """
@@ -36,7 +36,7 @@ class LVRTextHead(nn.Module):
         x = self.mlp(self.ln_q(x))
         return x
 from transformers.activations import ACT2FN
-class LVRHeadGLU(nn.Module):
+class SLVRHeadGLU(nn.Module):
     ''' 
         The Gated Liner Unit MLP
     '''
@@ -58,7 +58,7 @@ class LVRHeadGLU(nn.Module):
 
 
 # from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2RMSNorm
-# class LVRHeadRMS(nn.Module):
+# class SLVRHeadRMS(nn.Module):
 #     """
 #         Modified Patch Merger from transformers/models/qwen2_5_vl/modeling_qwen2_5_vl.py
 #         This inherits from the mm projector of qwen 2.5 vl

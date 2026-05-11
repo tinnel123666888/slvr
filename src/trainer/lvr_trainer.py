@@ -21,7 +21,7 @@ import os, time
 def _rank():
     return dist.get_rank() if dist.is_available() and dist.is_initialized() else 0
 
-def _rank_log(msg: str, base_dir="./slvr_debug"):
+def _rank_log(msg: str, base_dir="./sslvr_debug"):
     os.makedirs(base_dir, exist_ok=True)
     path = os.path.join(base_dir, f"rank{_rank()}.log")
     with open(path, "a", encoding="utf-8") as f:
@@ -44,10 +44,10 @@ def maybe_zero_3(param, ignore_status=False, name=None):
         param = param.detach().cpu().clone()
     return param
 
-class QwenLVRSFTTrainer(Trainer):
+class QwenSLVRSFTTrainer(Trainer):
 
     def __init__(self, *args, temp_folder=None, oci_handler=None, **kwargs):
-        super(QwenLVRSFTTrainer, self).__init__(*args, **kwargs)
+        super(QwenSLVRSFTTrainer, self).__init__(*args, **kwargs)
         # if online checkpointing
         if oci_handler:
             self.oci_handler = oci_handler
@@ -74,7 +74,7 @@ class QwenLVRSFTTrainer(Trainer):
             lr_mapper = {}
             visual_parameters = []
             merger_parameters = []
-            lvr_head_parameters =[]
+            slvr_head_parameters =[]
 
             if self.args.vision_lr is not None:
                 lr_mapper["visual"] = self.args.vision_lr
@@ -82,12 +82,12 @@ class QwenLVRSFTTrainer(Trainer):
             if self.args.merger_lr is not None:
                 lr_mapper["merger"] = self.args.merger_lr
                 merger_parameters = [name for name, _ in opt_model.named_parameters() if "merger" in name]
-            if self.args.lvr_head_lr is not None:
-                lr_mapper["lvr_head"] = self.args.lvr_head_lr
-                lvr_head_parameters = [name for name, _ in opt_model.named_parameters() if "lvr_head" in name]
+            if self.args.slvr_head_lr is not None:
+                lr_mapper["slvr_head"] = self.args.slvr_head_lr
+                slvr_head_parameters = [name for name, _ in opt_model.named_parameters() if "slvr_head" in name]
 
             if len(lr_mapper) > 0:
-                special_lr_parameters = merger_parameters + visual_parameters + lvr_head_parameters
+                special_lr_parameters = merger_parameters + visual_parameters + slvr_head_parameters
                 
                 optimizer_grouped_parameters = [
                     {
@@ -132,18 +132,18 @@ class QwenLVRSFTTrainer(Trainer):
                         ]
                     )
                 
-                if lvr_head_parameters: 
+                if slvr_head_parameters: 
                     optimizer_grouped_parameters.extend(
                         [
                             {
-                                "params": [p for n, p in opt_model.named_parameters() if (n in decay_parameters and n in lvr_head_parameters and p.requires_grad)],
+                                "params": [p for n, p in opt_model.named_parameters() if (n in decay_parameters and n in slvr_head_parameters and p.requires_grad)],
                                 "weight_decay": self.args.weight_decay,
-                                "lr": self.args.lvr_head_lr,
+                                "lr": self.args.slvr_head_lr,
                             },
                             {
-                                "params": [p for n, p in opt_model.named_parameters() if (n not in decay_parameters and n in lvr_head_parameters and p.requires_grad)],
+                                "params": [p for n, p in opt_model.named_parameters() if (n not in decay_parameters and n in slvr_head_parameters and p.requires_grad)],
                                 "weight_decay": 0.0,
-                                "lr": self.args.lvr_head_lr,
+                                "lr": self.args.slvr_head_lr,
                             },
                         ]
                     )
@@ -262,23 +262,23 @@ class QwenLVRSFTTrainer(Trainer):
                 print(f"[RANK {_rank()}] supervised_tokens=0 !!! ids={inputs.get('id', None)}")
         # loss = outputs.loss  # total loss
         loss_ce = outputs.loss_ce
-        loss_lvr = outputs.loss_lvr
+        loss_slvr = outputs.loss_slvr
         loss_mode_switch = outputs.loss_mode_switch
-        loss_lvr_text = outputs.loss_lvr_text
+        loss_slvr_text = outputs.loss_slvr_text
         if self.args.mode_switch_loss:
-            loss = loss_ce + self.args.loss_lvr_lambda * loss_lvr + self.args.loss_mode_switch_lambda * loss_mode_switch
+            loss = loss_ce + self.args.loss_slvr_lambda * loss_slvr + self.args.loss_mode_switch_lambda * loss_mode_switch
         else:
-            if loss_lvr_text is not None:
-                loss = loss_ce + self.args.loss_lvr_lambda * loss_lvr + self.args.loss_lvr_text_lambda * loss_lvr_text if self.args.loss_lvr_lambda > 0 else loss_ce
+            if loss_slvr_text is not None:
+                loss = loss_ce + self.args.loss_slvr_lambda * loss_slvr + self.args.loss_slvr_text_lambda * loss_slvr_text if self.args.loss_slvr_lambda > 0 else loss_ce
             else:
-                loss = loss_ce + self.args.loss_lvr_lambda * loss_lvr if self.args.loss_lvr_lambda > 0 else loss_ce
-        #self.args.loss_lvr_text_lambda
+                loss = loss_ce + self.args.loss_slvr_lambda * loss_slvr if self.args.loss_slvr_lambda > 0 else loss_ce
+        #self.args.loss_slvr_text_lambda
         # Log each component
         self.log({
             "loss_total": loss.detach().item(),
             "loss_ce": loss_ce.detach().item(),
-            "loss_lvr": loss_lvr.detach().item() if loss_lvr is not None else 0.0,
-            "loss_lvr_text":loss_lvr_text.detach().item() if loss_lvr_text is not None else 0.0,
+            "loss_slvr": loss_slvr.detach().item() if loss_slvr is not None else 0.0,
+            "loss_slvr_text":loss_slvr_text.detach().item() if loss_slvr_text is not None else 0.0,
             "loss_mode_switch": loss_mode_switch.detach().item() if loss_mode_switch is not None else 0.0,
         })
 

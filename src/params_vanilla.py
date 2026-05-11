@@ -19,8 +19,8 @@ class TrainingArguments(HFTrainingArguments):
     adam_beta2: float = field(default=0.999)
     adam_epsilon: float = field(default=1e-8)
 
-    loss_lvr_fct: str = field(default="mse")
-    loss_lvr_lambda: float = field(default=1e-1)
+    loss_slvr_fct: str = field(default="mse")
+    loss_slvr_lambda: float = field(default=1e-1)
 
     freeze_vision_tower: bool = field(default=False)
     freeze_llm: bool = field(default=False)
@@ -57,7 +57,7 @@ class TrainingArguments(HFTrainingArguments):
     lora_bias: str = "none"
     vision_lr: Optional[float] = None
     merger_lr: Optional[float] = None
-    lvr_head_lr: Optional[float] = None
+    slvr_head_lr: Optional[float] = None
     lora_namespan_exclude: str = field(default=None, metadata={"help": "List of namespan to exclude for LoRA"})
     num_lora_modules: int = -1
     # use_liger: bool = True
@@ -131,7 +131,7 @@ class GRPOArguments(GRPOConfigTRL):
     online_checkpoint: Optional[bool] = False
     checkpoint_name:Optional[str] = None
     decoding_strategy:str = "steps"
-    lvr_steps: int = 16
+    slvr_steps: int = 16
 
 
 

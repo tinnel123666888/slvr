@@ -10,7 +10,7 @@
     # from functools import partial
     # nan_modules = {}
 
-    # nan_layer_file = os.path.join("/dockerx/bangzhli/projects/LVR-Finetune/src/train/",f"nan_layers_detected_{training_args.run_name}.txt")
+    # nan_layer_file = os.path.join("/dockerx/bangzhli/projects/SLVR-Finetune/src/train/",f"nan_layers_detected_{training_args.run_name}.txt")
     # # re-write the log file
     # with open(nan_layer_file, 'w') as f:
     #     f.write("NaN Detection Log:\n" + "="*20 + "\n")

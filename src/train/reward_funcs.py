@@ -49,7 +49,7 @@ def accuracy_reward(completions, assistant, **kwargs):
 def format_reward(completions, **kwargs):
     """Reward function that checks if the completion has a specific format."""
     # pattern = r"<think>.*?</think>\s*<answer>.*?</answer>"
-    # lvr tokens are double-checked to reset as non-special tokens
+    # slvr tokens are double-checked to reset as non-special tokens
     pattern = r"^<\|vision_start\|>.*?<\|vision_end\|>\s*<sem>.*?<\/sem>\s*<answer>.*?</answer>$"
     completion_contents = [completion[0]["content"] for completion in completions]
     matches = [re.match(pattern, content) for content in completion_contents]

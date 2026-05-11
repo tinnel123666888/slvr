@@ -14,13 +14,13 @@ import torch.distributed as dist
 
 from transformers import AutoProcessor, AutoConfig, HfArgumentParser
 
-from src.model.qwen_lvr_model import QwenWithLVR
+from src.model.qwen_slvr_model import QwenWithSLVR
 from src.dataset.mgrpo_dataset import make_mgrpo_data_module
 from src.params import DataArguments, ModelArguments, GRPOArguments
 from src.train.train_utils import safe_save_model_for_hf_trainer, normalize_special_tokens
-from src.train.monkey_patch_forward_lvr import replace_qwen2_5_with_mixed_modality_forward_lvr
+from src.train.monkey_patch_forward_slvr import replace_qwen2_5_with_mixed_modality_forward_slvr
 from src.utils import load_reward_funcs
-from src.s3_checkpoints_lvr import OCIFolderCheckpointHandler, create_temp_dir
+from src.s3_checkpoints_slvr import OCIFolderCheckpointHandler, create_temp_dir
 from src.train.monkey_patch_patch_emb import replace_qwen_2_5_vl_patch_emb
 from src.trainer.mgrpo_trainer import QwenMGRPOTrainer
 
@@ -49,20 +49,20 @@ def configure_llm(model, training_args):
     set_requires_grad(model.model.parameters(), not training_args.freeze_llm)
 
 
-def ensure_lvr_tokens_and_ids(model, processor):
-    """Ensure LVR special tokens exist and sync their IDs into model.config."""
+def ensure_slvr_tokens_and_ids(model, processor):
+    """Ensure SLVR special tokens exist and sync their IDs into model.config."""
     tokenizer = processor.tokenizer
     tokenizer.padding_side = "left"
 
     token_pairs = [
-        ("lvr_start_id", "<|vision_start|>"),
-        ("lvr_id", "<|lvr|>"),
-        ("lvr_latent_end_id", "<|lvr_latent_end|>"),
-        ("lvr_end_id", "<|vision_end|>"),
-        ("lvr_text_start_id", "<sem>"),
-        ("lvr_text_id", "<|sem|>"),
-        ("lvr_text_latent_end_id", "<|sem_latent_end|>"),
-        ("lvr_text_end_id", "</sem>"),
+        ("slvr_start_id", "<|vision_start|>"),
+        ("slvr_id", "<|slvr|>"),
+        ("slvr_latent_end_id", "<|slvr_latent_end|>"),
+        ("slvr_end_id", "<|vision_end|>"),
+        ("slvr_text_start_id", "<sem>"),
+        ("slvr_text_id", "<|sem|>"),
+        ("slvr_text_latent_end_id", "<|sem_latent_end|>"),
+        ("slvr_text_end_id", "</sem>"),
     ]
 
     added = 0
@@ -117,9 +117,9 @@ def train():
     else:
         model_pth = model_args.model_id
 
-    # Normalize special tokens so LVR tokens can be generated
+    # Normalize special tokens so SLVR tokens can be generated
     tokens_to_normalize = {
-        "<|vision_start|>", "<|vision_end|>", "<|lvr|>", "<|lvr_latent_end|>",
+        "<|vision_start|>", "<|vision_end|>", "<|slvr|>", "<|slvr_latent_end|>",
         "<sem>", "</sem>", "<|sem|>",
     }
     normalize_special_tokens(model_pth, tokens_to_normalize)
@@ -129,21 +129,21 @@ def train():
     if model_args.latent_end_token:
         config.latent_end_token = True
     # Keep stage-1 checkpoint behavior by default; only override when explicitly enabled.
-    if model_args.lvr_text_head:
-        config.lvr_text_head = True
+    if model_args.slvr_text_head:
+        config.slvr_text_head = True
 
     # Monkey-patch forward
     if "Qwen2.5" in model_args.model_id:
-        # Use the comprehensive forward from monkey_patch_forward_lvr.py, not the RL-only version
+        # Use the comprehensive forward from monkey_patch_forward_slvr.py, not the RL-only version
         # This ensures latent decoding during generation works correctly (like in inference)
-        replace_qwen2_5_with_mixed_modality_forward_lvr(
+        replace_qwen2_5_with_mixed_modality_forward_slvr(
             inference_mode=False,  # Not inference mode (training mode)
             rl=True,               # Enable RL-specific logic
-            lvr_head=getattr(config, "lvr_head", False),
+            slvr_head=getattr(config, "slvr_head", False),
             latent_end_token=getattr(config, "latent_end_token", False),
         )
 
-        model = QwenWithLVR.from_pretrained(
+        model = QwenWithSLVR.from_pretrained(
             model_pth,
             config=config,
             torch_dtype=compute_dtype,
@@ -165,7 +165,7 @@ def train():
     # Without this, ZeRO-2 registers gradient hooks for these params but
     # their hooks never fire (no gradient flows), causing an allreduce
     # deadlock (SeqNum 732, NumelIn=3584).
-    _rl_unused_keywords = ('lvr_head', 'text_embedding_projector', 'lvr_latent_end_emb')
+    _rl_unused_keywords = ('slvr_head', 'text_embedding_projector', 'slvr_latent_end_emb')
     _frozen = []
     for name, param in model.named_parameters():
         if any(k in name for k in _rl_unused_keywords):
@@ -183,8 +183,8 @@ def train():
     model.visual.patch_embed.register_forward_hook(output_nan_sanitizer_hook)
 
     processor = AutoProcessor.from_pretrained(model_pth)
-    added_tokens = ensure_lvr_tokens_and_ids(model, processor)
-    rank0_print(f"[M-GRPO] LVR token check complete. Newly added tokens: {added_tokens}")
+    added_tokens = ensure_slvr_tokens_and_ids(model, processor)
+    rank0_print(f"[M-GRPO] SLVR token check complete. Newly added tokens: {added_tokens}")
 
     dataset_module = make_mgrpo_data_module(
         model_id=model_args.model_id,

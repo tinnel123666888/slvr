@@ -17,7 +17,7 @@ from tqdm import tqdm
 from pathlib import Path
 import socket
 
-from src.model.qwen_lvr_model import QwenWithLVR
+from src.model.qwen_slvr_model import QwenWithSLVR
 from transformers import AutoProcessor, AutoTokenizer, AutoConfig
 from qwen_vl_utils import process_vision_info
 
@@ -38,7 +38,7 @@ class Config:
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # <<< changed >>> 每个json单独保存，输出根目录固定到这里
-    OUTPUT_SUBDIR = os.path.join(OUTPUT_DIR, f"test_slvr_results_{STEP}")
+    OUTPUT_SUBDIR = os.path.join(OUTPUT_DIR, f"test_sslvr_results_{STEP}")
     os.makedirs(OUTPUT_SUBDIR, exist_ok=True)
 
     # 推理参数
@@ -162,14 +162,14 @@ def load_model_and_processor(chkpt_pth):
     """加载模型和处理器"""
     config = AutoConfig.from_pretrained(chkpt_pth)
 
-    from src.train.monkey_patch_forward_lvr import replace_qwen2_5_with_mixed_modality_forward_lvr
-    replace_qwen2_5_with_mixed_modality_forward_lvr(
+    from src.train.monkey_patch_forward_slvr import replace_qwen2_5_with_mixed_modality_forward_slvr
+    replace_qwen2_5_with_mixed_modality_forward_slvr(
         inference_mode=True,
-        lvr_head=config.lvr_head
+        slvr_head=config.slvr_head
     )
     config.latent_end_token = True
 
-    model = QwenWithLVR.from_pretrained(
+    model = QwenWithSLVR.from_pretrained(
         chkpt_pth,
         config=config,
         trust_remote_code=True,
@@ -225,7 +225,7 @@ def run_single_inference(model, processor, img_path, question, steps, decoding_s
             **inputs,
             max_new_tokens=512,
             decoding_strategy=decoding_strategy,
-            lvr_steps=[steps],
+            slvr_steps=[steps],
             eos_token_id=processor.tokenizer.eos_token_id,
         )
 
@@ -290,7 +290,7 @@ def run_batch_inference(model, processor, img_paths, questions, steps, decoding_
             **inputs,
             max_new_tokens=512,
             decoding_strategy=decoding_strategy,
-            lvr_steps=[steps] * len(img_paths),
+            slvr_steps=[steps] * len(img_paths),
             eos_token_id=processor.tokenizer.eos_token_id,
         )
 

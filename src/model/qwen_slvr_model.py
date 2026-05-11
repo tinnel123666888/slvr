@@ -1,5 +1,5 @@
 """
-    Implementation of LVR models based on Qwen-2.5-VL series
+    Implementation of SLVR models based on Qwen-2.5-VL series
 """
 import math
 import torch.nn as nn
@@ -51,36 +51,36 @@ from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled
 from transformers.integrations.fsdp import is_fsdp_managed_module
 
 
-from src.model.lvr_heads import LVRHead, LVRHeadGLU,LVRTextHead
+from src.model.slvr_heads import SLVRHead, SLVRHeadGLU,SLVRTextHead
 
-class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
+class QwenWithSLVR(Qwen2_5_VLForConditionalGeneration):
     def __init__(self, config):
         super().__init__(config)
-        if config.lvr_head:
-            self._init_lvr_head(config.lvr_head_type)
-        if config.lvr_text_head:
+        if config.slvr_head:
+            self._init_slvr_head(config.slvr_head_type)
+        if config.slvr_text_head:
             self.text_embedding_projector = torch.nn.Linear(4096, self.config.hidden_size, bias=False)
         if config.latent_end_token:
-            self._init_lvr_latent_end_emb()
+            self._init_slvr_latent_end_emb()
         
-    def _init_lvr_head(self,lvr_head_type):
-        print(f"Detected LVR Head Type: '{lvr_head_type}'")
-        if lvr_head_type == 'simple':
-            self.lvr_head = LVRHead(hidden_size=self.config.hidden_size)
-        elif lvr_head_type == 'glu':
-            self.lvr_head = LVRHeadGLU(hidden_size=self.config.hidden_size, 
+    def _init_slvr_head(self,slvr_head_type):
+        print(f"Detected SLVR Head Type: '{slvr_head_type}'")
+        if slvr_head_type == 'simple':
+            self.slvr_head = SLVRHead(hidden_size=self.config.hidden_size)
+        elif slvr_head_type == 'glu':
+            self.slvr_head = SLVRHeadGLU(hidden_size=self.config.hidden_size, 
                                        intermediate_size=self.config.intermediate_size,
                                        hidden_act=self.config.hidden_act)
         else:
             # Raise an error for an unknown variant to prevent silent failures
-            raise ValueError(f"Unknown lvr_head_type: '{lvr_head_type}'. "
+            raise ValueError(f"Unknown slvr_head_type: '{slvr_head_type}'. "
                              "Supported variants are 'simple', 'glu'.")
-        self.config.lvr_head_type = lvr_head_type
+        self.config.slvr_head_type = slvr_head_type
 
         
-    def _init_lvr_latent_end_emb(self):
+    def _init_slvr_latent_end_emb(self):
 
-        print(f"Activated Learnable latent end token of LVR")
+        print(f"Activated Learnable latent end token of SLVR")
         # Initializing the learnable latentend
         # 2X norm to distinguish this from the normal semantic space
         target_norm_scale_latentend = 1
@@ -88,15 +88,15 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
             v = torch.randn(self.config.hidden_size, dtype=self.dtype, device=self.device)
             v = v / (v.norm() + 1e-6)
             v = v * (target_norm_scale_latentend * math.sqrt(self.config.hidden_size))
-        self.lvr_latent_end_emb = torch.nn.Parameter(v)
+        self.slvr_latent_end_emb = torch.nn.Parameter(v)
 
-        # lvr_latent_end_emb = torch.full(
+        # slvr_latent_end_emb = torch.full(
         #     (config.hidden_size,),
         #     fill_value=1.0 / self.config.hidden_size
         # )
-        # self.register_buffer('lvr_latent_end_emb', lvr_latent_end_emb)    # will not compute grad
+        # self.register_buffer('slvr_latent_end_emb', slvr_latent_end_emb)    # will not compute grad
     
-    # Patch the generation function with lvr_generate
+    # Patch the generation function with slvr_generate
     def generate(
         self,
         inputs: Optional[torch.Tensor] = None,
@@ -112,12 +112,12 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
         use_model_defaults: Optional[bool] = None,
         decoding_strategy:Optional[str]=None,
         criterion: Optional[str]="mse",
-        lvr_end_threshold: Optional[float]=0.02,
-        lvr_steps: Optional[List[int]]=None,
+        slvr_end_threshold: Optional[float]=0.02,
+        slvr_steps: Optional[List[int]]=None,
         **kwargs,
         ) -> Union[GenerateOutput, torch.LongTensor]:
         """
-            Patching the generation function for LVR
+            Patching the generation function for SLVR
         """
 
         # Params in 
@@ -125,10 +125,10 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
             decoding_strategy = generation_config.decoding_strategy
         if criterion is None and hasattr(generation_config,'criterion'):
             criterion = generation_config.criterion
-        if lvr_end_threshold is None and hasattr(generation_config,'lvr_end_threshold'):
-            lvr_end_threshold = generation_config.lvr_end_threshold
-        if lvr_steps is None and hasattr(generation_config,'lvr_steps'):
-            lvr_steps = generation_config.lvr_steps
+        if slvr_end_threshold is None and hasattr(generation_config,'slvr_end_threshold'):
+            slvr_end_threshold = generation_config.slvr_end_threshold
+        if slvr_steps is None and hasattr(generation_config,'slvr_steps'):
+            slvr_steps = generation_config.slvr_steps
 
         # 1. Handle `generation_config` and kwargs that might update it, and validate the `.generate()` call
         # self._validate_model_kwargs()
@@ -302,7 +302,7 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
         # 10. go into different generation modes
         '''
             No other modes
-            LVR decoding only
+            SLVR decoding only
         '''
         # 11. expand input_ids with `num_return_sequences` additional sequences per batch
         input_ids, model_kwargs = self._expand_inputs_for_generation(
@@ -314,10 +314,10 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
 
         # 12. run sample (it degenerates to greedy search when `generation_config.do_sample=False`)
         '''
-            ._sample is patched by _lvr_decoding
+            ._sample is patched by _slvr_decoding
         '''
         if decoding_strategy == "latent":
-            result = self._lvr_deocding_with_latentend(
+            result = self._slvr_deocding_with_latentend(
                 input_ids,
                 logits_processor=prepared_logits_processor,
                 stopping_criteria=prepared_stopping_criteria,
@@ -325,25 +325,25 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
                 synced_gpus=synced_gpus,
                 streamer=streamer,
                 criterion = criterion,
-                lvr_end_threshold= lvr_end_threshold,
-                lvr_max_steps = lvr_steps,
+                slvr_end_threshold= slvr_end_threshold,
+                slvr_max_steps = slvr_steps,
                 **model_kwargs,)
             
         elif decoding_strategy == "steps":
-            result = self._lvr_deocding_by_steps(
+            result = self._slvr_deocding_by_steps(
                 input_ids,
                 logits_processor=prepared_logits_processor,
                 stopping_criteria=prepared_stopping_criteria,
                 generation_config=generation_config,
                 synced_gpus=synced_gpus,
                 streamer=streamer,
-                lvr_steps = lvr_steps,
+                slvr_steps = slvr_steps,
                 **model_kwargs,)
         else:
             # Vanilla decoding
-            # enters LVR if it sees start
-            # exits LVR if it sees end
-            result = self._lvr_deocding(
+            # enters SLVR if it sees start
+            # exits SLVR if it sees end
+            result = self._slvr_deocding(
                 input_ids,
                 logits_processor=prepared_logits_processor,
                 stopping_criteria=prepared_stopping_criteria,
@@ -351,8 +351,8 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
                 synced_gpus=synced_gpus,
                 streamer=streamer,
                 criterion = criterion,
-                lvr_end_threshold= lvr_end_threshold,
-                lvr_steps=lvr_steps,
+                slvr_end_threshold= slvr_end_threshold,
+                slvr_steps=slvr_steps,
                 **model_kwargs,
             )
 
@@ -365,8 +365,8 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
             result.past_key_values = result.past_key_values.to_legacy_cache()
         return result
     
-    # LVR docoding logic
-    def _lvr_deocding(
+    # SLVR docoding logic
+    def _slvr_deocding(
             self,
             input_ids: torch.LongTensor,
             logits_processor: LogitsProcessorList,
@@ -459,7 +459,7 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
             else:
                 is_prefill = True
 
-            lvr_mode_switch = torch.zeros(batch_size,dtype=torch.bool,device=input_ids.device)  # switch gate for lvr mode
+            slvr_mode_switch = torch.zeros(batch_size,dtype=torch.bool,device=input_ids.device)  # switch gate for slvr mode
             last_position_hidden_state = None
             while self._has_unfinished_sequences(this_peer_finished, synced_gpus, device=input_ids.device):
                 # prepare model inputs
@@ -469,7 +469,7 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
                 model_inputs.update({"output_attentions": output_attentions} if output_attentions else {})
                 model_inputs.update({"output_hidden_states": output_hidden_states} if output_hidden_states else {})
                 
-                model_inputs.update({"lvr_mode_switch":lvr_mode_switch})
+                model_inputs.update({"slvr_mode_switch":slvr_mode_switch})
                 model_inputs.update({"last_position_hidden_state":last_position_hidden_state})
                 if is_prefill:
                     outputs = self(**model_inputs, return_dict=True)
@@ -525,34 +525,34 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
                 if has_eos_stopping_criteria:
                     next_tokens = next_tokens * unfinished_sequences + pad_token_id * (1 - unfinished_sequences)
 
-                # During LVR mode, token IDs are placeholders while hidden states
+                # During SLVR mode, token IDs are placeholders while hidden states
                 # carry the latent reasoning signal. Force <|vision_end|> placeholders
                 # to keep KV-cache context stable and aligned with inference outputs.
-                if lvr_mode_switch.any():
+                if slvr_mode_switch.any():
                     next_tokens = torch.where(
-                        lvr_mode_switch,
-                        torch.tensor(self.config.lvr_end_id, device=next_tokens.device, dtype=next_tokens.dtype),
+                        slvr_mode_switch,
+                        torch.tensor(self.config.slvr_end_id, device=next_tokens.device, dtype=next_tokens.dtype),
                         next_tokens,
                     )
 
                 '''
-                    LVR reasoning mode switches:
+                    SLVR reasoning mode switches:
 
                     When next token is <|vision_start|>, we still need to pass its token id through decoding
-                    When last token is <|vision_start|>, we will start passing hidden states (enter lvr mode)
+                    When last token is <|vision_start|>, we will start passing hidden states (enter slvr mode)
 
-                    When next token is <|vision_end|>, we will stop passing hidden states (end lvr mode)
+                    When next token is <|vision_end|>, we will stop passing hidden states (end slvr mode)
 
-                    ONE ASSUMPTION: The LVR hidden states shall not trigger <|vision_end|>
+                    ONE ASSUMPTION: The SLVR hidden states shall not trigger <|vision_end|>
                 '''
                 last_tokens = input_ids[:,-1]
-                lvr_start_switch = (last_tokens == self.config.lvr_start_id).to(device=input_ids.device)            
-                lvr_end_switch = (next_tokens == self.config.lvr_end_id).to(device=input_ids.device)                
+                slvr_start_switch = (last_tokens == self.config.slvr_start_id).to(device=input_ids.device)            
+                slvr_end_switch = (next_tokens == self.config.slvr_end_id).to(device=input_ids.device)                
                 '''
-                    Goal: lvr_mode_switch = lvr_mode_switch + lvr_start_switch - lvr_end_switch
+                    Goal: slvr_mode_switch = slvr_mode_switch + slvr_start_switch - slvr_end_switch
 
                 '''
-                lvr_mode_switch = (lvr_mode_switch | lvr_start_switch) & (~lvr_end_switch)
+                slvr_mode_switch = (slvr_mode_switch | slvr_start_switch) & (~slvr_end_switch)
                 last_position_hidden_state = outputs.last_position_hidden_state
 
                 # update generated ids, model inputs, and length for next step
@@ -561,9 +561,9 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
                     streamer.put(next_tokens.cpu())
                     
                 # unfinished_sequences = unfinished_sequences & ~stopping_criteria(input_ids, scores)
-                """if lvr mode is unfinished, do not stop"""
+                """if slvr mode is unfinished, do not stop"""
                 unfinished_sequences = (
-                    lvr_mode_switch | (unfinished_sequences & ~stopping_criteria(input_ids, scores))
+                    slvr_mode_switch | (unfinished_sequences & ~stopping_criteria(input_ids, scores))
                 )
                 this_peer_finished = unfinished_sequences.max() == 0
                 cur_len += 1
@@ -600,7 +600,7 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
             else:
                 return input_ids
 
-    def _lvr_deocding_with_latentend(
+    def _slvr_deocding_with_latentend(
             self,
             input_ids: torch.LongTensor,
             logits_processor: LogitsProcessorList,
@@ -609,8 +609,8 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
             synced_gpus: bool,
             streamer: Optional["BaseStreamer"],
             criterion: Optional[str]="mse",
-            lvr_end_threshold: Optional[float]=0.1,
-            lvr_max_steps: Optional[int]=16,
+            slvr_end_threshold: Optional[float]=0.1,
+            slvr_max_steps: Optional[int]=16,
             **model_kwargs,
         ) -> Union[GenerateNonBeamOutput, torch.LongTensor]:
             r"""
@@ -646,7 +646,7 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
                 `model.config.is_encoder_decoder=True`.
             """
             # init values
-            lvr_max_steps = lvr_max_steps[0] if isinstance(lvr_max_steps,list) else lvr_max_steps
+            slvr_max_steps = slvr_max_steps[0] if isinstance(slvr_max_steps,list) else slvr_max_steps
             pad_token_id = generation_config._pad_token_tensor
             output_attentions = generation_config.output_attentions
             output_hidden_states = generation_config.output_hidden_states
@@ -696,7 +696,7 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
 
             # print(criterion)
             
-            '''set the lvr latent end criterion'''
+            '''set the slvr latent end criterion'''
             if criterion == 'mse':
                 criterion_fct = MSELoss(reduction="none")
             elif criterion == 'mae':
@@ -709,10 +709,10 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
             else:
                 raise ValueError(f"Unsupported criterion_fct: {criterion_fct}")
 
-            lvr_mode_switch = torch.zeros(batch_size,dtype=torch.bool,device=input_ids.device)  # switch gate for lvr mode
+            slvr_mode_switch = torch.zeros(batch_size,dtype=torch.bool,device=input_ids.device)  # switch gate for slvr mode
             last_position_hidden_state = None
 
-            lvr_step_counter = torch.zeros(batch_size, dtype=torch.long, device=input_ids.device) # track LVR steps
+            slvr_step_counter = torch.zeros(batch_size, dtype=torch.long, device=input_ids.device) # track SLVR steps
             while self._has_unfinished_sequences(this_peer_finished, synced_gpus, device=input_ids.device):
                 # prepare model inputs
                 model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
@@ -721,7 +721,7 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
                 model_inputs.update({"output_attentions": output_attentions} if output_attentions else {})
                 model_inputs.update({"output_hidden_states": output_hidden_states} if output_hidden_states else {})
                 
-                model_inputs.update({"lvr_mode_switch":lvr_mode_switch})
+                model_inputs.update({"slvr_mode_switch":slvr_mode_switch})
                 model_inputs.update({"last_position_hidden_state":last_position_hidden_state})
 
                 if is_prefill:
@@ -778,58 +778,58 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
                 if has_eos_stopping_criteria:
                     next_tokens = next_tokens * unfinished_sequences + pad_token_id * (1 - unfinished_sequences)
 
-                # During LVR mode, token IDs are placeholders while hidden states
+                # During SLVR mode, token IDs are placeholders while hidden states
                 # carry the latent reasoning signal. Force <|vision_end|> placeholders
                 # to keep KV-cache context stable and aligned with inference outputs.
-                if lvr_mode_switch.any():
+                if slvr_mode_switch.any():
                     next_tokens = torch.where(
-                        lvr_mode_switch,
-                        torch.tensor(self.config.lvr_end_id, device=next_tokens.device, dtype=next_tokens.dtype),
+                        slvr_mode_switch,
+                        torch.tensor(self.config.slvr_end_id, device=next_tokens.device, dtype=next_tokens.dtype),
                         next_tokens,
                     )
 
                 '''
-                    LVR reasoning mode switches:
+                    SLVR reasoning mode switches:
 
                     When next token is <|vision_start|>, we still need to pass its token id through decoding
-                    When last token is <|vision_start|>, we will start passing hidden states (enter lvr mode)
+                    When last token is <|vision_start|>, we will start passing hidden states (enter slvr mode)
 
-                    When current output's last_hidden_state ~ lvr_latent_end, we still pass hidden states 
-                    When last position's last_hidden_state ~ lvr_latent_end, we will start passing tokens(end lvr mode)
+                    When current output's last_hidden_state ~ slvr_latent_end, we still pass hidden states 
+                    When last position's last_hidden_state ~ slvr_latent_end, we will start passing tokens(end slvr mode)
 
-                    ONE ASSUMPTION: The LVR hidden states shall not trigger <|vision_end|>
+                    ONE ASSUMPTION: The SLVR hidden states shall not trigger <|vision_end|>
                 '''
 
                 last_tokens = input_ids[:,-1]
-                lvr_start_switch = (last_tokens == self.config.lvr_start_id).to(device=input_ids.device)            
+                slvr_start_switch = (last_tokens == self.config.slvr_start_id).to(device=input_ids.device)            
                 '''
                     At this moment, the last_position_hidden_states has not been updated,
                     it is still the output of the position before.
                     We check 
                 '''
                 if last_position_hidden_state is None:
-                    lvr_end_switch = torch.zeros(batch_size, dtype=torch.bool, device=input_ids.device)
+                    slvr_end_switch = torch.zeros(batch_size, dtype=torch.bool, device=input_ids.device)
                 else:
-                    lvr_end_switch = criterion_fct(
+                    slvr_end_switch = criterion_fct(
                                         last_position_hidden_state, 
-                                        self.lvr_latent_end_emb.unsqueeze(0).expand_as(last_position_hidden_state)
+                                        self.slvr_latent_end_emb.unsqueeze(0).expand_as(last_position_hidden_state)
                                         ).mean(dim=-1)
-                    lvr_end_switch = lvr_end_switch < lvr_end_threshold
+                    slvr_end_switch = slvr_end_switch < slvr_end_threshold
 
-                # If currently in LVR mode, increment counter
-                lvr_step_counter = lvr_step_counter + lvr_mode_switch.long()
-                # Reset counter when entering LVR mode
-                lvr_step_counter = torch.where(lvr_start_switch, torch.zeros_like(lvr_step_counter), lvr_step_counter)
+                # If currently in SLVR mode, increment counter
+                slvr_step_counter = slvr_step_counter + slvr_mode_switch.long()
+                # Reset counter when entering SLVR mode
+                slvr_step_counter = torch.where(slvr_start_switch, torch.zeros_like(slvr_step_counter), slvr_step_counter)
                 # Force exit if budget exceeded
-                lvr_budget_exceeded = lvr_step_counter >= lvr_max_steps
+                slvr_budget_exceeded = slvr_step_counter >= slvr_max_steps
 
                 '''
-                    Goal: lvr_mode_switch = lvr_mode_switch + lvr_start_switch - lvr_end_switch
-                    Update: exit lvr when lvr_budget_exceeded 
+                    Goal: slvr_mode_switch = slvr_mode_switch + slvr_start_switch - slvr_end_switch
+                    Update: exit slvr when slvr_budget_exceeded 
 
                 '''
-                # lvr_mode_switch = ((lvr_mode_switch | lvr_start_switch) & (~lvr_end_switch)).to(torch.bool)
-                lvr_mode_switch = ((lvr_mode_switch | lvr_start_switch) & (~lvr_end_switch) & (~lvr_budget_exceeded)).to(torch.bool)
+                # slvr_mode_switch = ((slvr_mode_switch | slvr_start_switch) & (~slvr_end_switch)).to(torch.bool)
+                slvr_mode_switch = ((slvr_mode_switch | slvr_start_switch) & (~slvr_end_switch) & (~slvr_budget_exceeded)).to(torch.bool)
                 last_position_hidden_state = outputs.last_position_hidden_state     #We can now update the last position hidden states    
 
                 # update generated ids, model inputs, and length for next step
@@ -838,11 +838,11 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
                     streamer.put(next_tokens.cpu())
 
                 # unfinished_sequences = unfinished_sequences & ~stopping_criteria(input_ids, scores)
-                """if lvr mode is unfinished, do not stop"""
+                """if slvr mode is unfinished, do not stop"""
                 unfinished_sequences = (
-                    lvr_mode_switch | (unfinished_sequences & ~stopping_criteria(input_ids, scores))
+                    slvr_mode_switch | (unfinished_sequences & ~stopping_criteria(input_ids, scores))
                 )
-                # print(lvr_mode_switch)
+                # print(slvr_mode_switch)
                 this_peer_finished = unfinished_sequences.max() == 0
                 cur_len += 1
 
@@ -878,8 +878,8 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
             else:
                 return input_ids
 
-# LVR docoding logic
-    def _lvr_deocding_by_steps(
+# SLVR docoding logic
+    def _slvr_deocding_by_steps(
         self,
         input_ids: torch.LongTensor,
         logits_processor: LogitsProcessorList,
@@ -887,7 +887,7 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
         generation_config: GenerationConfig,
         synced_gpus: bool,
         streamer: Optional["BaseStreamer"],
-        lvr_steps: List[int],
+        slvr_steps: List[int],
         **model_kwargs,
     ) -> Union[GenerateNonBeamOutput, torch.LongTensor]:
         r"""
@@ -973,12 +973,12 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
         else:
             is_prefill = True
 
-        lvr_mode_switch = torch.zeros(batch_size,dtype=torch.bool,device=input_ids.device)  # switch gate for lvr mode
+        slvr_mode_switch = torch.zeros(batch_size,dtype=torch.bool,device=input_ids.device)  # switch gate for slvr mode
         last_position_hidden_state = None
 
-        # Track LVR quotas
-        lvr_steps_orig = torch.tensor(lvr_steps, dtype=torch.int, device=input_ids.device)  # original quota
-        lvr_remaining_steps = lvr_steps_orig.clone()
+        # Track SLVR quotas
+        slvr_steps_orig = torch.tensor(slvr_steps, dtype=torch.int, device=input_ids.device)  # original quota
+        slvr_remaining_steps = slvr_steps_orig.clone()
         while self._has_unfinished_sequences(this_peer_finished, synced_gpus, device=input_ids.device):
             # prepare model inputs
             model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
@@ -987,7 +987,7 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
             model_inputs.update({"output_attentions": output_attentions} if output_attentions else {})
             model_inputs.update({"output_hidden_states": output_hidden_states} if output_hidden_states else {})
             
-            model_inputs.update({"lvr_mode_switch":lvr_mode_switch})
+            model_inputs.update({"slvr_mode_switch":slvr_mode_switch})
             model_inputs.update({"last_position_hidden_state":last_position_hidden_state})
             if is_prefill:
                 outputs = self(**model_inputs, return_dict=True)
@@ -1044,36 +1044,36 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
                 next_tokens = next_tokens * unfinished_sequences + pad_token_id * (1 - unfinished_sequences)
 
             '''
-                LVR reasoning mode switches:
+                SLVR reasoning mode switches:
 
                 When next token is <|vision_start|>, we still need to pass its token id through decoding
-                When last token is <|vision_start|>, we will start passing hidden states (enter lvr mode)
+                When last token is <|vision_start|>, we will start passing hidden states (enter slvr mode)
 
-                During LVR, keep passing hidden_states until quota uses up
+                During SLVR, keep passing hidden_states until quota uses up
             '''
             last_tokens = input_ids[:,-1]
-            lvr_start_switch = (last_tokens == self.config.lvr_start_id).to(device=input_ids.device)            
+            slvr_start_switch = (last_tokens == self.config.slvr_start_id).to(device=input_ids.device)            
           
             '''
-                Goal: lvr_mode_switch = lvr_mode_switch + lvr_start_switch 
-                the exit is controlled by lvr quota now, not <|vision_end|>
+                Goal: slvr_mode_switch = slvr_mode_switch + slvr_start_switch 
+                the exit is controlled by slvr quota now, not <|vision_end|>
 
             '''
             # Candidate new switch (no end token anymore)
-            new_mode_switch = lvr_mode_switch | lvr_start_switch
+            new_mode_switch = slvr_mode_switch | slvr_start_switch
 
             # Detect entry vs continuation
-            just_entered = (~lvr_mode_switch) & new_mode_switch
-            still_in     = lvr_mode_switch & new_mode_switch
+            just_entered = (~slvr_mode_switch) & new_mode_switch
+            still_in     = slvr_mode_switch & new_mode_switch
 
             # Reset quota when entering
-            lvr_remaining_steps = torch.where(just_entered, lvr_steps_orig, lvr_remaining_steps)
+            slvr_remaining_steps = torch.where(just_entered, slvr_steps_orig, slvr_remaining_steps)
 
             # Decrement quota only if we were already inside before this step
-            lvr_remaining_steps = lvr_remaining_steps - lvr_mode_switch.long()
+            slvr_remaining_steps = slvr_remaining_steps - slvr_mode_switch.long()
 
             # Exit if quota used up
-            lvr_mode_switch = new_mode_switch & (lvr_remaining_steps > 0)
+            slvr_mode_switch = new_mode_switch & (slvr_remaining_steps > 0)
 
 
             last_position_hidden_state = outputs.last_position_hidden_state
@@ -1084,9 +1084,9 @@ class QwenWithLVR(Qwen2_5_VLForConditionalGeneration):
                 streamer.put(next_tokens.cpu())
 
             # unfinished_sequences = unfinished_sequences & ~stopping_criteria(input_ids, scores)
-            """if lvr mode is unfinished, do not stop"""
+            """if slvr mode is unfinished, do not stop"""
             unfinished_sequences = (
-                lvr_mode_switch | (unfinished_sequences & ~stopping_criteria(input_ids, scores))
+                slvr_mode_switch | (unfinished_sequences & ~stopping_criteria(input_ids, scores))
             )
 
             this_peer_finished = unfinished_sequences.max() == 0

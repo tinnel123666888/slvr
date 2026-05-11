@@ -48,7 +48,7 @@
 
 import os
 import sys
-sys.path.append("/dockerx/bangzhli/projects/LVR-Finetune")
+sys.path.append("/dockerx/bangzhli/projects/SLVR-Finetune")
 
 
 
@@ -123,7 +123,7 @@ from trl.trainer.utils import (
 
 from src.train.train_utils import get_peft_state_non_lora_maybe_zero_3
 from src.constants import MULTIMODAL_KEYWORDS
-from src.model.qwen_lvr_model import QwenWithLVR
+from src.model.qwen_slvr_model import QwenWithSLVR
 from transformers import AutoConfig
 from qwen_vl_utils import process_vision_info
 
@@ -371,7 +371,7 @@ class QwenGRPO2QTrainer(Trainer):
                 # 2. config
                 ref_model_config = AutoConfig.from_pretrained(self.ref_model_pth,trust_remote_code=True)
                 compute_dtype = (torch.float16 if args.fp16 else (torch.bfloat16 if args.bf16 else torch.float32))
-                self.ref_model = QwenWithLVR.from_pretrained(
+                self.ref_model = QwenWithSLVR.from_pretrained(
                     self.ref_model_pth,
                     config=ref_model_config,
                     torch_dtype=compute_dtype,
@@ -566,9 +566,9 @@ class QwenGRPO2QTrainer(Trainer):
                 repetition_penalty=self.repetition_penalty,
                 cache_implementation=args.cache_implementation,
                 decoding_strategy=args.decoding_strategy,
-                lvr_steps=args.lvr_steps,
+                slvr_steps=args.slvr_steps,
                 criterion=args.criterion,
-                lvr_end_threshold=args.lvr_end_threshold,
+                slvr_end_threshold=args.slvr_end_threshold,
             )
 
         # Gradient accumulation requires scaled loss. Normally, loss scaling in the parent class depends on whether the
@@ -746,7 +746,7 @@ class QwenGRPO2QTrainer(Trainer):
         return inputs
     
     '''
-        This function has been adapted to LVR models
+        This function has been adapted to SLVR models
     '''
     def _generate_and_score_completions(
         self, inputs: list[dict[str, Union[torch.Tensor, Any]]]
@@ -885,27 +885,27 @@ You are a helpful assistant.<|im_end|>
             truncated_completions = ~is_eos.any(dim=1)
             completion_mask = completion_mask * (~truncated_completions).unsqueeze(1).int()
 
-        # --- NEW: Build LVR mask ---
+        # --- NEW: Build SLVR mask ---
         # Mask out the entire latent span: <|vision_start|> through all forced
         # <|vision_end|> tokens until <sem> signals real text output.
-        lvr_mask = torch.ones_like(prompt_completion_ids, dtype=torch.bool)
+        slvr_mask = torch.ones_like(prompt_completion_ids, dtype=torch.bool)
         for b in range(prompt_completion_ids.size(0)):
             active = False
             for t in range(prompt_completion_ids.size(1)):
                 tok = prompt_completion_ids[b, t].item()
-                if tok == self.model.config.lvr_start_id:
+                if tok == self.model.config.slvr_start_id:
                     active = True
-                elif tok == self.model.config.lvr_text_start_id:
+                elif tok == self.model.config.slvr_text_start_id:
                     active = False
                 if active:
-                    lvr_mask[b, t] = False  # zero out inside LVR span
+                    slvr_mask[b, t] = False  # zero out inside SLVR span
         print("\n" + "="*80)
-        print("[STEP 7] LVR掩码")
-        print(f"lvr_mask.shape={lvr_mask.shape}, lvr_mask.sum()={lvr_mask.sum()}")
+        print("[STEP 7] SLVR掩码")
+        print(f"slvr_mask.shape={slvr_mask.shape}, slvr_mask.sum()={slvr_mask.sum()}")
 
         # Concatenate prompt_mask with completion_mask for logit computation
         attention_mask = torch.cat([prompt_mask, completion_mask], dim=1)  # (B, P+C)
-        final_mask = attention_mask.bool() & lvr_mask  ### << only count valid + non-LVR tokens
+        final_mask = attention_mask.bool() & slvr_mask  ### << only count valid + non-SLVR tokens
 
         print("\n" + "="*80)
         print("[STEP 8] 最终掩码")
@@ -916,15 +916,15 @@ You are a helpful assistant.<|im_end|>
         batch_size = self.args.per_device_train_batch_size if mode == "train" else self.args.per_device_eval_batch_size
 
 
-        def _lvr_score(model, ids, mask, logits_to_keep, **kwargs):
-            if getattr(self.generation_config, "lvr_steps", 0) > 0:
-                return self.score_with_lvr_replay(
+        def _slvr_score(model, ids, mask, logits_to_keep, **kwargs):
+            if getattr(self.generation_config, "slvr_steps", 0) > 0:
+                return self.score_with_slvr_replay(
                     model,
                     input_ids=ids[:, :prompt_ids.size(1)],   # only the prompt
                     attention_mask=mask[:, :prompt_ids.size(1)],
                     target_ids=ids,
                     generation_config=self.generation_config,
-                    lvr_steps=[self.generation_config.lvr_steps] * ids.size(0),
+                    slvr_steps=[self.generation_config.slvr_steps] * ids.size(0),
                     enable_grad=False,   # for old/ref; True later in loss computation
                     **kwargs,
                 )
@@ -935,7 +935,7 @@ You are a helpful assistant.<|im_end|>
             # When using num_iterations == 1, old_per_token_logps == per_token_logps, so we can skip it's
             # computation here, and use per_token_logps.detach() instead.
             if self.num_iterations > 1:
-                old_per_token_logps = _lvr_score(
+                old_per_token_logps = _slvr_score(
                     self.model, prompt_completion_ids, attention_mask, logits_to_keep, **multimodal_inputs
                 )   
                 old_per_token_logps = old_per_token_logps * final_mask[:, -logits_to_keep:]  ### apply mask
@@ -948,7 +948,7 @@ You are a helpful assistant.<|im_end|>
                 # ref_per_token_logps = self._get_per_token_logps(
                 #     self.ref_model, prompt_completion_ids, attention_mask, logits_to_keep, batch_size, **multimodal_inputs
                 # )
-                ref_per_token_logps = _lvr_score(
+                ref_per_token_logps = _slvr_score(
                     self.ref_model, 
                     prompt_completion_ids, 
                     attention_mask, 
@@ -962,7 +962,7 @@ You are a helpful assistant.<|im_end|>
                 #         self.model, prompt_completion_ids, attention_mask, logits_to_keep, batch_size, **multimodal_inputs
                 #     )
                 with self.accelerator.unwrap_model(self.model).disable_adapter():
-                    ref_per_token_logps = _lvr_score(
+                    ref_per_token_logps = _slvr_score(
                         self.model, 
                         prompt_completion_ids, 
                         attention_mask, 
@@ -971,18 +971,18 @@ You are a helpful assistant.<|im_end|>
                     )
 
         # Decode the generated completions
-        # CRITICAL: Filter out LVR internal tokens before batch_decode to avoid garbage text.
-        # LVR tokens between <|vision_start|> and <|vision_end|> are intermediate representations (noise)
-        # and should not be decoded. Use lvr_mask to filter them out.
+        # CRITICAL: Filter out SLVR internal tokens before batch_decode to avoid garbage text.
+        # SLVR tokens between <|vision_start|> and <|vision_end|> are intermediate representations (noise)
+        # and should not be decoded. Use slvr_mask to filter them out.
         completion_ids_filtered = completion_ids.clone()
-        lvr_start_pos = prompt_ids.size(1)  # offset where completion starts (in full sequence coords)
-        lvr_mask_completion = lvr_mask[:, lvr_start_pos:]  # lvr_mask for completion part only
+        slvr_start_pos = prompt_ids.size(1)  # offset where completion starts (in full sequence coords)
+        slvr_mask_completion = slvr_mask[:, slvr_start_pos:]  # slvr_mask for completion part only
         
         for b in range(completion_ids_filtered.size(0)):
-            # For each sample, create a filtered list without LVR internal tokens
+            # For each sample, create a filtered list without SLVR internal tokens
             valid_tokens = []
             for t in range(completion_ids_filtered.size(1)):
-                if lvr_mask_completion[b, t].item():  # only keep tokens where lvr_mask is True
+                if slvr_mask_completion[b, t].item():  # only keep tokens where slvr_mask is True
                     valid_tokens.append(completion_ids_filtered[b, t].item())
             
             # Pad or truncate back to original length (pad with eos_token_id)
@@ -1169,7 +1169,7 @@ You are a helpful assistant.<|im_end|>
         prompt_mask = inputs["prompt_mask"]
         completion_ids = inputs["completion_ids"]
         completion_mask = inputs["completion_mask"]
-        final_mask = inputs["final_mask"]               # NEW: excludes LVR + truncated tokens
+        final_mask = inputs["final_mask"]               # NEW: excludes SLVR + truncated tokens
         multimodal_inputs = inputs["multimodal_inputs"]
 
         old_per_token_logps = inputs["old_per_token_logps"]
@@ -1186,28 +1186,28 @@ You are a helpful assistant.<|im_end|>
         prompt_completion_ids = torch.cat([prompt_ids, completion_ids], dim=1)
         attention_mask = torch.cat([prompt_mask, completion_mask], dim=1)
 
-        if getattr(self.generation_config, "lvr_steps", 0) > 0:
+        if getattr(self.generation_config, "slvr_steps", 0) > 0:
             """This is problematic as gradients are computed multiple times"""
-            # per_token_logps = self.score_with_lvr_replay(
+            # per_token_logps = self.score_with_slvr_replay(
             #     model,
             #     input_ids=prompt_ids,                  # prompt only
             #     attention_mask=prompt_mask,
             #     target_ids=prompt_completion_ids,      # full sequence (teacher forcing)
             #     generation_config=self.generation_config,
-            #     lvr_steps=[self.generation_config.lvr_steps] * batch_size,
+            #     slvr_steps=[self.generation_config.slvr_steps] * batch_size,
             #     enable_grad=True,                      # !!!
             #     **multimodal_inputs,
             # )
 
-            """This method requires zero grad for lvr replay"""
-            # 1) replay LVR under no_grad to reconstruct final LVR states
-            lvr_states, lvr_mask, had_lvr, model_kwargs_after_lvr = self._replay_lvr_to_collect_states(
+            """This method requires zero grad for slvr replay"""
+            # 1) replay SLVR under no_grad to reconstruct final SLVR states
+            slvr_states, slvr_mask, had_slvr, model_kwargs_after_slvr = self._replay_slvr_to_collect_states(
                 model, 
                 prompt_ids, 
                 prompt_mask, 
                 prompt_completion_ids, 
                 multimodal_inputs,
-                lvr_steps=self.generation_config.lvr_steps
+                slvr_steps=self.generation_config.slvr_steps
             )
 
             # Prepare inputs for full forward (this builds the autograd graph once)
@@ -1235,9 +1235,9 @@ You are a helpful assistant.<|im_end|>
             model_inputs.update(multimodal_inputs)
             model_inputs.update(
                 {
-                    "lvr_mask": lvr_mask, 
-                    "lvr_states": lvr_states,
-                    "lvr_mode_switch": None,
+                    "slvr_mask": slvr_mask, 
+                    "slvr_states": slvr_states,
+                    "slvr_mode_switch": None,
                     "last_position_hidden_state": None,
                     'prompt_length':prompt_ids.size(1),
                 }
@@ -1269,7 +1269,7 @@ You are a helpful assistant.<|im_end|>
             )
 
         # ----------------------------------------------------
-        # 2) Apply final_mask to exclude LVR + truncated tokens
+        # 2) Apply final_mask to exclude SLVR + truncated tokens
         # Keep only completion part
         per_token_logps = per_token_logps * final_mask
         # ----------------------------------------------------
@@ -1557,14 +1557,14 @@ You are a helpful assistant.<|im_end|>
 
         model_card.save(os.path.join(self.args.output_dir, "README.md"))
 
-    def score_with_lvr_replay(
+    def score_with_slvr_replay(
         self,
         model,
         input_ids: torch.LongTensor,
         attention_mask: torch.LongTensor,
         target_ids: torch.LongTensor,
         generation_config,
-        lvr_steps: list,
+        slvr_steps: list,
         device=None,
         # return_per_token_logps: bool = True,
         apply_temperature: float = 1.0,
@@ -1572,7 +1572,7 @@ You are a helpful assistant.<|im_end|>
         **model_kwargs,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Replay the LVR decoding loop and compute per-token log-probs of target_ids.
+        Replay the SLVR decoding loop and compute per-token log-probs of target_ids.
         - input_ids: (B, prompt_len) initial prompt tokens (should include any special tokens)
         - target_ids: (B, T_total) full target sequence including prompt and completion, aligned with the replay
             Usually you will pass the full input_ids + completion so that target_ids[:, step] is the "next" token at that step.
@@ -1631,10 +1631,10 @@ You are a helpful assistant.<|im_end|>
             # build attention mask matching cur_input_ids
             cur_attention_mask = attention_mask.clone().to(device)
 
-            # prepare bookkeeping just like your _lvr_deocding_by_steps
-            lvr_steps_orig = torch.tensor(lvr_steps, dtype=torch.int, device=device)  # can be broadcast if same
-            lvr_remaining_steps = lvr_steps_orig.clone()
-            lvr_mode_switch = torch.zeros(batch_size, dtype=torch.bool, device=device)
+            # prepare bookkeeping just like your _slvr_deocding_by_steps
+            slvr_steps_orig = torch.tensor(slvr_steps, dtype=torch.int, device=device)  # can be broadcast if same
+            slvr_remaining_steps = slvr_steps_orig.clone()
+            slvr_mode_switch = torch.zeros(batch_size, dtype=torch.bool, device=device)
             last_position_hidden_state = None
             multimodal_keys = (
                 "pixel_values",
@@ -1708,8 +1708,8 @@ You are a helpful assistant.<|im_end|>
                 model_inputs.update({"output_attentions": generation_config.output_attentions} if getattr(generation_config, "output_attentions", False) else {})
                 model_inputs.update({"output_hidden_states": generation_config.output_hidden_states} if getattr(generation_config, "output_hidden_states", False) else {})
 
-                # pass LVR flags
-                model_inputs.update({"lvr_mode_switch": lvr_mode_switch})
+                # pass SLVR flags
+                model_inputs.update({"slvr_mode_switch": slvr_mode_switch})
                 model_inputs.update({"last_position_hidden_state": last_position_hidden_state})
 
                 # call model
@@ -1742,16 +1742,16 @@ You are a helpful assistant.<|im_end|>
                 step_logps = log_probs.gather(dim=1, index=next_gold.unsqueeze(1)).squeeze(1)  # (B,)
                 per_step_logps.append(step_logps)
 
-                # --- update LVR counters exactly like in your code ---
+                # --- update SLVR counters exactly like in your code ---
                 last_tokens = cur_input_ids[:, -1]
-                lvr_start_switch = (last_tokens == self.model.config.lvr_start_id).to(device=device)
-                new_mode_switch = lvr_mode_switch | lvr_start_switch
-                just_entered = (~lvr_mode_switch) & new_mode_switch
-                # still_in = lvr_mode_switch & new_mode_switch
-                lvr_remaining_steps = torch.where(just_entered, lvr_steps_orig, lvr_remaining_steps)
-                # lvr_remaining_steps = lvr_remaining_steps - still_in.long()
-                lvr_remaining_steps = lvr_remaining_steps - lvr_mode_switch.long()
-                lvr_mode_switch = new_mode_switch & (lvr_remaining_steps > 0)
+                slvr_start_switch = (last_tokens == self.model.config.slvr_start_id).to(device=device)
+                new_mode_switch = slvr_mode_switch | slvr_start_switch
+                just_entered = (~slvr_mode_switch) & new_mode_switch
+                # still_in = slvr_mode_switch & new_mode_switch
+                slvr_remaining_steps = torch.where(just_entered, slvr_steps_orig, slvr_remaining_steps)
+                # slvr_remaining_steps = slvr_remaining_steps - still_in.long()
+                slvr_remaining_steps = slvr_remaining_steps - slvr_mode_switch.long()
+                slvr_mode_switch = new_mode_switch & (slvr_remaining_steps > 0)
 
                 # update last_position_hidden_state from outputs (must exist in your patched forward)
                 # last_position_hidden_state = getattr(outputs, "last_position_hidden_state", None)
@@ -1762,12 +1762,12 @@ You are a helpful assistant.<|im_end|>
                 cur_attention_mask = torch.cat([cur_attention_mask, torch.ones(batch_size, 1, device=device, dtype=cur_attention_mask.dtype)], dim=1)
 
                 # update unfinished sequences: keep it consistent with your stopping rule
-                # here we want to stop only after we've exhausted target tokens or all sequences hit EOS (but LVR sequences should not stop early)
+                # here we want to stop only after we've exhausted target tokens or all sequences hit EOS (but SLVR sequences should not stop early)
                 # using identical logic to your code:
                 # WARNING: you may need to provide `scores` placeholder if your stopping uses it
                 scores_placeholder = None
                 finished_mask = torch.zeros_like(unfinished_sequences)  # we don't stop because we want full scoring; adapt if needed
-                unfinished_sequences = (lvr_mode_switch | (unfinished_sequences & ~finished_mask)).long()
+                unfinished_sequences = (slvr_mode_switch | (unfinished_sequences & ~finished_mask)).long()
 
                 this_peer_finished = (unfinished_sequences.max() == 0) or (cur_input_ids.size(1) >= target_ids.size(1))
                 cur_len += 1
@@ -1786,49 +1786,49 @@ You are a helpful assistant.<|im_end|>
 
             return per_token_logps
         
-    def _compute_lvr_spans(self, prompt_completion_ids, prompt_len):
+    def _compute_slvr_spans(self, prompt_completion_ids, prompt_len):
         """
-        Return two long tensors (lvr_start_idx, lvr_end_idx) of shape (B,).
-        If a sample has no lvr_start, start == seq_len.
-        If lvr_start present and no lvr_end, end == seq_len.
-        lvr tokens are considered from start index (inclusive) up to end index (exclusive).
+        Return two long tensors (slvr_start_idx, slvr_end_idx) of shape (B,).
+        If a sample has no slvr_start, start == seq_len.
+        If slvr_start present and no slvr_end, end == seq_len.
+        slvr tokens are considered from start index (inclusive) up to end index (exclusive).
         """
         device = prompt_completion_ids.device
         B, seq_len = prompt_completion_ids.size()
-        lvr_start_idx = torch.full((B,), seq_len, dtype=torch.long, device=device)
-        lvr_end_idx = torch.full((B,), seq_len, dtype=torch.long, device=device)
-        start_id = self.model.config.lvr_start_id
-        end_id = self.model.config.lvr_end_id
+        slvr_start_idx = torch.full((B,), seq_len, dtype=torch.long, device=device)
+        slvr_end_idx = torch.full((B,), seq_len, dtype=torch.long, device=device)
+        start_id = self.model.config.slvr_start_id
+        end_id = self.model.config.slvr_end_id
 
         for b in range(B):
             # scan only the completion region
             for t in range(prompt_len, seq_len):
                 tok = int(prompt_completion_ids[b, t].item())
-                if tok == start_id and lvr_start_idx[b] == seq_len:
-                    lvr_start_idx[b] = t
-                elif tok == end_id and lvr_start_idx[b] != seq_len and lvr_end_idx[b] == seq_len:
-                    lvr_end_idx[b] = t
+                if tok == start_id and slvr_start_idx[b] == seq_len:
+                    slvr_start_idx[b] = t
+                elif tok == end_id and slvr_start_idx[b] != seq_len and slvr_end_idx[b] == seq_len:
+                    slvr_end_idx[b] = t
             # if we saw start but never end, end at seq_len
-            if lvr_start_idx[b] != seq_len and lvr_end_idx[b] == seq_len:
-                lvr_end_idx[b] = seq_len
-        return lvr_start_idx, lvr_end_idx
+            if slvr_start_idx[b] != seq_len and slvr_end_idx[b] == seq_len:
+                slvr_end_idx[b] = seq_len
+        return slvr_start_idx, slvr_end_idx
 
     @torch.no_grad()
-    def _replay_lvr_to_collect_states(
+    def _replay_slvr_to_collect_states(
         self, 
         model, 
         prompt_ids, 
         prompt_mask, 
         prompt_completion_ids, 
         multimodal_inputs,
-        lvr_steps
+        slvr_steps
     ):
         """
-        Teacher-force the *generated* tokens for the LVR windows (no gradients).
+        Teacher-force the *generated* tokens for the SLVR windows (no gradients).
         Returns:
-        - last_position_hidden_state: the final LVR state for each sample (or None for samples with no LVR)
-        - had_lvr: boolean tensor (B,) True if sample used LVR at all
-        This function does NOT compute any logprobs; it only advances the model to reconstruct LVR hidden states.
+        - last_position_hidden_state: the final SLVR state for each sample (or None for samples with no SLVR)
+        - had_slvr: boolean tensor (B,) True if sample used SLVR at all
+        This function does NOT compute any logprobs; it only advances the model to reconstruct SLVR hidden states.
         """
         # IMPORTANT: unwrap the model so DeepSpeed ZeRO-2 gradient hooks are NOT
         # triggered during this no-grad replay.  Otherwise the stale hook state
@@ -1871,11 +1871,11 @@ You are a helpful assistant.<|im_end|>
         if prev_training_mode:
             generation_model.eval()
 
-        lvr_start_idx, lvr_end_idx = self._compute_lvr_spans(prompt_completion_ids, prompt_len)
+        slvr_start_idx, slvr_end_idx = self._compute_slvr_spans(prompt_completion_ids, prompt_len)
 
         H = self.model.config.hidden_size
-        lvr_states = torch.zeros(B, max_completion_steps, H, device='cpu', dtype=self.model.dtype)
-        lvr_mask = torch.zeros(B, max_completion_steps, dtype=torch.bool, device='cpu')
+        slvr_states = torch.zeros(B, max_completion_steps, H, device='cpu', dtype=self.model.dtype)
+        slvr_mask = torch.zeros(B, max_completion_steps, dtype=torch.bool, device='cpu')
 
         # initial cache / model kwargs (match generation)
         model_kwargs = {}
@@ -1895,12 +1895,12 @@ You are a helpful assistant.<|im_end|>
         last_position_hidden_state = None
 
         # Calculate the end index based on configuration, not data.
-        configured_end_idx = lvr_start_idx + lvr_steps
+        configured_end_idx = slvr_start_idx + slvr_steps
 
-        # Use configured_end_idx (not lvr_end_idx) to determine loop range,
-        # because with forced <|vision_end|> tokens lvr_end_idx only reaches
+        # Use configured_end_idx (not slvr_end_idx) to determine loop range,
+        # because with forced <|vision_end|> tokens slvr_end_idx only reaches
         # vision_start + 1, which is far too short for the full latent replay.
-        max_inference_steps = int((configured_end_idx - lvr_start_idx).max().item()) + 1
+        max_inference_steps = int((configured_end_idx - slvr_start_idx).max().item()) + 1
         seq_len = prompt_completion_ids.size(1)
 
         for step in range(max_inference_steps+1):
@@ -1910,9 +1910,9 @@ You are a helpful assistant.<|im_end|>
                 break
 
             # ---------------------------------------------------------
-            # Determine LVR mode for the forward pass.
+            # Determine SLVR mode for the forward pass.
             # Must mirror the generation loop exactly:
-            #   - <|vision_start|> (at lvr_start_idx) is processed with mode=False
+            #   - <|vision_start|> (at slvr_start_idx) is processed with mode=False
             #   - The *next* token after that is the first processed with mode=True
             # At step N (N>=1) the model processes the token appended at step N-1,
             # which sits at absolute position prompt_len + N - 1.
@@ -1921,14 +1921,14 @@ You are a helpful assistant.<|im_end|>
                 forward_mode = torch.zeros(B, dtype=torch.bool, device=device)
             else:
                 processed_pos = prompt_len + step - 1  # abs pos of token being processed
-                forward_mode = ((processed_pos > lvr_start_idx) & (processed_pos <= configured_end_idx)).to(device=device)
+                forward_mode = ((processed_pos > slvr_start_idx) & (processed_pos <= configured_end_idx)).to(device=device)
 
             # prepare model inputs for this step
             model_kwargs["attention_mask"] = cur_attention_mask
             model_inputs = generation_model.prepare_inputs_for_generation(cur_input_ids, **model_kwargs)
             model_inputs.update(
                 {
-                    "lvr_mode_switch": forward_mode, 
+                    "slvr_mode_switch": forward_mode, 
                     "last_position_hidden_state": last_position_hidden_state
                     }
             )
@@ -1944,7 +1944,7 @@ You are a helpful assistant.<|im_end|>
                 is_encoder_decoder=getattr(generation_model.config, "is_encoder_decoder", False),
             )
 
-            # update last_position_hidden_state (may be None for non-lvr samples)
+            # update last_position_hidden_state (may be None for non-slvr samples)
             last_position_hidden_state = getattr(outputs, "last_position_hidden_state", last_position_hidden_state)
 
             # ---------------------------------------------------------
@@ -1954,12 +1954,12 @@ You are a helpful assistant.<|im_end|>
             # This matches the generation loop where last_position_hidden_state
             # from processing position K becomes the input at position K+1.
             # ---------------------------------------------------------
-            in_span = ((pos > lvr_start_idx) & (pos <= configured_end_idx)).to(device=device)
+            in_span = ((pos > slvr_start_idx) & (pos <= configured_end_idx)).to(device=device)
             update_mask = in_span.cpu()
             if update_mask.any():
                 states_to_store = last_position_hidden_state[update_mask].cpu()
-                lvr_states[update_mask, step] = states_to_store
-                lvr_mask[update_mask, step] = True
+                slvr_states[update_mask, step] = states_to_store
+                slvr_mask[update_mask, step] = True
 
             # teacher-force append the generated gold token at pos
             next_gold = prompt_completion_ids[:, pos].unsqueeze(1)
@@ -1975,10 +1975,10 @@ You are a helpful assistant.<|im_end|>
             # delete outputs to free mem
             del outputs
 
-        # had_lvr: whether start index is < seq_len
-        had_lvr = (lvr_start_idx < total_len).to(device=device)
+        # had_slvr: whether start index is < seq_len
+        had_slvr = (slvr_start_idx < total_len).to(device=device)
         # last_position_hidden_state is the final state after replay (or None if never produced)
         if prev_training_mode:
             generation_model.train()
-        return lvr_states.to(device), lvr_mask.to(device), had_lvr, model_kwargs
+        return slvr_states.to(device), slvr_mask.to(device), had_slvr, model_kwargs
 

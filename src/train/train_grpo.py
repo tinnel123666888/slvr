@@ -5,16 +5,16 @@ import torch
 import pathlib
 from transformers import AutoProcessor, HfArgumentParser
 
-from src.model.qwen_lvr_model import QwenWithLVR
+from src.model.qwen_slvr_model import QwenWithSLVR
 from src.trainer import QwenGRPO2QTrainer as QwenGRPOTrainer
 from src.dataset import make_grpo_data_module
 from transformers import AutoProcessor, AutoConfig, HfArgumentParser
 from src.params import DataArguments, ModelArguments, GRPOArguments
 from src.train.train_utils import safe_save_model_for_hf_trainer
-from monkey_patch_forward_lvr_rl import replace_qwen2_5_with_mixed_modality_forward_lvr_rl
+from monkey_patch_forward_slvr_rl import replace_qwen2_5_with_mixed_modality_forward_slvr_rl
 from src.utils import  load_reward_funcs
 
-from src.s3_checkpoints_lvr import OCIFolderCheckpointHandler, create_temp_dir
+from src.s3_checkpoints_slvr import OCIFolderCheckpointHandler, create_temp_dir
 from src.train.monkey_patch_patch_emb import replace_qwen_2_5_vl_patch_emb
 from src.train.train_utils import normalize_special_tokens
 
@@ -114,7 +114,7 @@ def train():
 
 
     '''
-        Monkey patching model forward function with lvr
+        Monkey patching model forward function with slvr
         Configure model
     '''
     compute_dtype = (torch.float16 if training_args.fp16 else (torch.bfloat16 if training_args.bf16 else torch.float32))
@@ -122,7 +122,7 @@ def train():
     ##if we are starting from a checkpoint
     if training_args.checkpoint_name:
         if training_args.online_checkpoint:
-            # CHKPT_NAME="checkpoints_lvrHead_featureAlign/Qwen2.5-VL-7B-Instruct/BS256-LAMBDA1-LVR_HEAD_LR1e-5-MAXTOKEN{7680}/checkpoint-1578/"
+            # CHKPT_NAME="checkpoints_slvrHead_featureAlign/Qwen2.5-VL-7B-Instruct/BS256-LAMBDA1-SLVR_HEAD_LR1e-5-MAXTOKEN{7680}/checkpoint-1578/"
             stage1_details = training_args.checkpoint_name.split('Stage1_')[-1]
             stage1_details = stage1_details.split('/')[0]
 
@@ -135,25 +135,25 @@ def train():
     else:
         model_pth = model_args.model_id
     
-    # model_pth = "/dockerx/Local/users/bangzheng/Qwen2.5-VL-3B-Instruct/stage1_chkpt_0.5TI_mseLVRLossLambda0.1-MaxVisToken5120-MinVisToken128-lxo8qmsy"
-    # model_pth = "/dockerx/Local/users/bangzheng/Qwen2.5-VL-3B-Instruct/stage1_chkpt_0.5TI_mseLVRLossLambda0.1-MaxVisToken5120-MinVisToken128-flpc_tdx"
+    # model_pth = "/dockerx/Local/users/bangzheng/Qwen2.5-VL-3B-Instruct/stage1_chkpt_0.5TI_mseSLVRLossLambda0.1-MaxVisToken5120-MinVisToken128-lxo8qmsy"
+    # model_pth = "/dockerx/Local/users/bangzheng/Qwen2.5-VL-3B-Instruct/stage1_chkpt_0.5TI_mseSLVRLossLambda0.1-MaxVisToken5120-MinVisToken128-flpc_tdx"
     # d4c1
-    # model_pth = "/dockerx/Local/users/bangzheng/Qwen2.5-VL-3B-Instruct/stage1_chkpt_0.5TI_mseLVRLossLambda0.1-MaxVisToken5120-MinVisToken128-2iikdq77"
+    # model_pth = "/dockerx/Local/users/bangzheng/Qwen2.5-VL-3B-Instruct/stage1_chkpt_0.5TI_mseSLVRLossLambda0.1-MaxVisToken5120-MinVisToken128-2iikdq77"
     # 9424
-    # model_pth = "/dockerx/Local/users/bangzheng/Qwen2.5-VL-3B-Instruct/stage1_chkpt_0.5TI_mseLVRLossLambda0.1-MaxVisToken5120-MinVisToken128-nmdyh7i7"
+    # model_pth = "/dockerx/Local/users/bangzheng/Qwen2.5-VL-3B-Instruct/stage1_chkpt_0.5TI_mseSLVRLossLambda0.1-MaxVisToken5120-MinVisToken128-nmdyh7i7"
     # 7BBF
-    # model_pth = "/dockerx/Local/users/bangzheng/Qwen2.5-VL-3B-Instruct/stage1_chkpt_0.5TI_mseLVRLossLambda0.1-MaxVisToken5120-MinVisToken128-hc8f8dq3"
+    # model_pth = "/dockerx/Local/users/bangzheng/Qwen2.5-VL-3B-Instruct/stage1_chkpt_0.5TI_mseSLVRLossLambda0.1-MaxVisToken5120-MinVisToken128-hc8f8dq3"
     # 949C
-    # model_pth = "/dockerx/Local/users/bangzheng/Qwen2.5-VL-3B-Instruct/stage1_chkpt_0.5TI_mseLVRLossLambda0.1-MaxVisToken5120-MinVisToken128-_f5spje9"
+    # model_pth = "/dockerx/Local/users/bangzheng/Qwen2.5-VL-3B-Instruct/stage1_chkpt_0.5TI_mseSLVRLossLambda0.1-MaxVisToken5120-MinVisToken128-_f5spje9"
     
 
-    # double check the special_token_flag, We want to make sure lvr tokens can be output
-    tokens_to_normalize = {"<|vision_start|>", "<|vision_end|>", "<|lvr|>", "<|lvr_latent_end|>","<sem>","</sem>","<|sem|>","<|lvr_latent_end|>"}
+    # double check the special_token_flag, We want to make sure slvr tokens can be output
+    tokens_to_normalize = {"<|vision_start|>", "<|vision_end|>", "<|slvr|>", "<|slvr_latent_end|>","<sem>","</sem>","<|sem|>","<|slvr_latent_end|>"}
     normalize_special_tokens(model_pth,tokens_to_normalize)
 
     # get the model config
     config = AutoConfig.from_pretrained(model_pth,trust_remote_code=True)
-    config.lvr_text_head = model_args.lvr_text_head
+    config.slvr_text_head = model_args.slvr_text_head
     if hasattr(config, 'decoder_config') and isinstance(config.decoder_config, dict):
         # 对于 Qwen 模型，可能需要特定的配置类
         from transformers import Qwen2_5_VLConfig
@@ -162,22 +162,22 @@ def train():
     # Load model based on model type
     if "Qwen2.5" in model_args.model_id:
         # Patch the forward function
-        replace_qwen2_5_with_mixed_modality_forward_lvr_rl()
+        replace_qwen2_5_with_mixed_modality_forward_slvr_rl()
         
-        model = QwenWithLVR.from_pretrained(
+        model = QwenWithSLVR.from_pretrained(
             model_pth,
             config=config,
             torch_dtype=compute_dtype,
             attn_implementation="flash_attention_2" if not training_args.disable_flash_attn2 else "sdpa",
         )
 
-        # init lvr_head
-        if model_args.lvr_head:
-            model._init_lvr_head(lvr_head_type =  model_args.lvr_head_type)
+        # init slvr_head
+        if model_args.slvr_head:
+            model._init_slvr_head(slvr_head_type =  model_args.slvr_head_type)
         
         # init latent_end_token
         if model_args.latent_end_token:
-            model._init_lvr_latent_end_emb()
+            model._init_slvr_latent_end_emb()
             model.config.loss_mode_switch_fct = training_args.loss_mode_switch_fct
 
         
@@ -185,8 +185,8 @@ def train():
         replace_qwen_2_5_vl_patch_emb()
 
     # elif "InternVL" in model_args.model_id:
-    #     replace_qwen2_5_with_mixed_modality_forward_lvr(coconut=model_args.coconut,
-    #                                                     lvr_head=model_args.lvr_head,
+    #     replace_qwen2_5_with_mixed_modality_forward_slvr(coconut=model_args.coconut,
+    #                                                     slvr_head=model_args.slvr_head,
     #                                                     mode_switch_loss=training_args.mode_switch_loss,
     #                                                     latent_end_token=model_args.latent_end_token)
     #     from transformers import InternVLForConditionalGeneration

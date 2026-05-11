@@ -15,7 +15,7 @@ from src.params_vanilla import DataArguments, ModelArguments, TrainingArguments
 from train.train_utils import safe_save_model_for_hf_trainer
 from monkey_patch_forward import replace_qwen2_5_with_mixed_modality_forward
 
-from src.s3_checkpoints_lvr import OCIFolderCheckpointHandler, create_temp_dir
+from src.s3_checkpoints_slvr import OCIFolderCheckpointHandler, create_temp_dir
 from src.train.monkey_patch_patch_emb import replace_qwen_2_5_vl_patch_emb
 from src.train.monkey_patch_dataloader import replace_train_dataloader
 
@@ -93,7 +93,7 @@ def train():
     local_rank = training_args.local_rank
 
     '''
-        Monkey patching model forward function with lvr
+        Monkey patching model forward function with slvr
         Configure model
     '''
     compute_dtype = (torch.float16 if training_args.fp16 else (torch.bfloat16 if training_args.bf16 else torch.float32))
@@ -101,8 +101,8 @@ def train():
     # if we are starting from a checkpoint
     if training_args.checkpoint_name:
         if training_args.online_checkpoint:
-            # CHKPT_NAME="checkpoints_lvrHead_featureAlign/Qwen2.5-VL-7B-Instruct/BS256-LAMBDA1-LVR_HEAD_LR1e-5-MAXTOKEN{7680}/checkpoint-1578/"
-            local_pth_to_download_chkpt = create_temp_dir(base_path=os.path.join(cache_dir,model_name),prefix=f"warmed_{model_args.lvr_head_type}" + '-')
+            # CHKPT_NAME="checkpoints_slvrHead_featureAlign/Qwen2.5-VL-7B-Instruct/BS256-LAMBDA1-SLVR_HEAD_LR1e-5-MAXTOKEN{7680}/checkpoint-1578/"
+            local_pth_to_download_chkpt = create_temp_dir(base_path=os.path.join(cache_dir,model_name),prefix=f"warmed_{model_args.slvr_head_type}" + '-')
             oci_handler.load_checkpoint(training_args.checkpoint_name, local_pth_to_download_chkpt,inference_mode=True)
             
             model_pth = local_pth_to_download_chkpt.name
@@ -157,7 +157,7 @@ def train():
 
     '''
         Data module configurations
-        use data packing for faster training due to the random input lengths of LVR
+        use data packing for faster training due to the random input lengths of SLVR
     '''
     # model.config.tokenizer_model_max_length = processor.tokenizer.model_max_length
     data_module = make_supervised_data_module(model_id=model_args.model_id,

@@ -13,9 +13,9 @@ from src.constants import (
 
     VISION_START_TOKEN,
     VISION_END_TOKEN,
-    LVR_TOKEN,
-    LVR_LATENT_END_TOKEN,
-    LVR_PLACEHOLDER,SEM_START_TOKEN,SEM_TOKEN,SEM_END_TOKEN,SEM_PLACEHOLDER
+    SLVR_TOKEN,
+    SLVR_LATENT_END_TOKEN,
+    SLVR_PLACEHOLDER,SEM_START_TOKEN,SEM_TOKEN,SEM_END_TOKEN,SEM_PLACEHOLDER
 
 )
 
@@ -30,32 +30,32 @@ def replace_image_tokens(input_string, is_video=False):
 
     return re.sub(pattern, replacement, input_string)
 
-def replace_lvr_tokens(input_string, lvr_token_idxs_list, latent_end_token, fixed_num_of_lvr_tokens):
+def replace_slvr_tokens(input_string, slvr_token_idxs_list, latent_end_token, fixed_num_of_slvr_tokens):
     '''Video not implemented'''
-    # 处理普通LVR tokens
-    if LVR_PLACEHOLDER in input_string:
-        parts = input_string.split(LVR_PLACEHOLDER)
+    # 处理普通SLVR tokens
+    if SLVR_PLACEHOLDER in input_string:
+        parts = input_string.split(SLVR_PLACEHOLDER)
         result_parts = [parts[0]]  # 保留第一部分（占位符前的内容）
         
         for i, seg in enumerate(parts[1:], 1):
-            if fixed_num_of_lvr_tokens is not None:
-                num_tokens = fixed_num_of_lvr_tokens
+            if fixed_num_of_slvr_tokens is not None:
+                num_tokens = fixed_num_of_slvr_tokens
             else:
-                # 确保有足够的lvr_token_idxs
-                if i-1 < len(lvr_token_idxs_list):
-                    num_tokens = len(lvr_token_idxs_list[i-1])
+                # 确保有足够的slvr_token_idxs
+                if i-1 < len(slvr_token_idxs_list):
+                    num_tokens = len(slvr_token_idxs_list[i-1])
                 else:
                     num_tokens = 0
                 
             if latent_end_token:
-                replacement = VISION_START_TOKEN + LVR_TOKEN*num_tokens + LVR_LATENT_END_TOKEN + VISION_END_TOKEN
+                replacement = VISION_START_TOKEN + SLVR_TOKEN*num_tokens + SLVR_LATENT_END_TOKEN + VISION_END_TOKEN
             else:
-                replacement = VISION_START_TOKEN + LVR_TOKEN*num_tokens + VISION_END_TOKEN
+                replacement = VISION_START_TOKEN + SLVR_TOKEN*num_tokens + VISION_END_TOKEN
             result_parts.append(replacement + seg)
         
         input_string = "".join(result_parts)
     
-    # 处理LVR text tokens
+    # 处理SLVR text tokens
     if SEM_PLACEHOLDER in input_string:
         parts = input_string.split(SEM_PLACEHOLDER)
         result_parts = [parts[0]]  # 保留第一部分
@@ -70,16 +70,16 @@ def replace_lvr_tokens(input_string, lvr_token_idxs_list, latent_end_token, fixe
 
 
 
-def llava_to_openai_lvr(conversations, is_video=False, lvr_token_idxs_list=None, latent_end_token=False, fixed_num_of_lvr_tokens=None):
+def llava_to_openai_slvr(conversations, is_video=False, slvr_token_idxs_list=None, latent_end_token=False, fixed_num_of_slvr_tokens=None):
 
-    # assert lvr_token_idxs_list is not None
+    # assert slvr_token_idxs_list is not None
 
     role_mapping = {"human": "user", "gpt": "assistant"}
 
     transformed_data = []
     for conversation in conversations:
         transformed_content = replace_image_tokens(conversation["value"], is_video=is_video)
-        transformed_content = replace_lvr_tokens(transformed_content,lvr_token_idxs_list,latent_end_token,fixed_num_of_lvr_tokens)
+        transformed_content = replace_slvr_tokens(transformed_content,slvr_token_idxs_list,latent_end_token,fixed_num_of_slvr_tokens)
         transformed_entry = {
             "role": role_mapping.get(conversation["from"], conversation["from"]),
             "content": transformed_content,

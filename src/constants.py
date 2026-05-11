@@ -8,9 +8,9 @@ LLAVA_IMAGE_TOKEN = "<image>"
 LLAVA_VIDEO_TOKEN = "<video>"
 VISION_START_TOKEN = "<|vision_start|>"
 VISION_END_TOKEN = "<|vision_end|>"
-LVR_TOKEN = "<|lvr|>"
-LVR_LATENT_END_TOKEN="<|lvr_latent_end|>"
-LVR_PLACEHOLDER="<lvr>"
+SLVR_TOKEN = "<|slvr|>"
+SLVR_LATENT_END_TOKEN="<|slvr_latent_end|>"
+SLVR_PLACEHOLDER="<slvr>"
 
 SEM_START_TOKEN = "<sem>"
 SEM_END_TOKEN = "</sem>"
@@ -20,6 +20,6 @@ SEM_PLACEHOLDER="<sem_placeholder>"
 
 SYSTEM_MESSAGE = "You are a helpful assistant."
 
-LVR_SYSTEM_MESSAGE = "Put your final answer in <answer> </answer>."
+SLVR_SYSTEM_MESSAGE = "Put your final answer in <answer> </answer>."
 
 MULTIMODAL_KEYWORDS = ["pixel_values", "image_grid_thw", "video_grid_thw", "pixel_values_videos", "second_per_grid_ts"]

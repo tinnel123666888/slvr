@@ -1,6 +1,6 @@
 """
     This file is adapted from InternVL [https://github.com/OpenGVLab/InternVL/tree/main]
-    We adapted and simplified the PackedDataset and IterableSupervisedDataset for our LVR finetuning
+    We adapted and simplified the PackedDataset and IterableSupervisedDataset for our SLVR finetuning
 """
 
 
@@ -23,12 +23,12 @@ from src.constants import (
     SYSTEM_MESSAGE,
     VISION_START_TOKEN,
     VISION_END_TOKEN,
-    LVR_TOKEN,
+    SLVR_TOKEN,
     SEM_TOKEN
 )
 from transformers import TrainingArguments
 
-from .data_utils import get_image_info, llava_to_openai_lvr, pad_sequence
+from .data_utils import get_image_info, llava_to_openai_slvr, pad_sequence
 import numpy as np
 from PIL import Image
 from typing import List, Tuple
@@ -54,7 +54,7 @@ def get_rank():
     return dist.get_rank()
 
   
-def make_packed_supervised_data_module_lvr(model_id, processor, data_args, training_args: TrainingArguments,latent_end_token=False):
+def make_packed_supervised_data_module_slvr(model_id, processor, data_args, training_args: TrainingArguments,latent_end_token=False):
 
     """Make dataset and collator for supervised fine-tuning."""
 
@@ -67,7 +67,7 @@ def make_packed_supervised_data_module_lvr(model_id, processor, data_args, train
     datasets = []
     total_data_len = 0
     for meta in meta_data:
-        iterable_sft_dataset = IterableSupervisedDatasetLVR(
+        iterable_sft_dataset = IterableSupervisedDatasetSLVR(
             data_path=meta['data_path'],
             image_folder=meta['image_folder'],
             ds_name=meta['ds_name'],
@@ -98,7 +98,7 @@ def make_packed_supervised_data_module_lvr(model_id, processor, data_args, train
         max_instance_per_batch=training_args.max_instance_per_batch,
     )
 
-    data_collator = PackedDataCollatorForSupervisedDatasetLVR(
+    data_collator = PackedDataCollatorForSupervisedDatasetSLVR(
         pad_token_id=processor.tokenizer.pad_token_id
     )
 
@@ -110,7 +110,7 @@ def make_packed_supervised_data_module_lvr(model_id, processor, data_args, train
 import torch
 from torch.utils.data import IterableDataset
 
-class IterableSupervisedDatasetLVR(IterableDataset):  # ✅ 继承 IterableDataset
+class IterableSupervisedDatasetSLVR(IterableDataset):  # ✅ 继承 IterableDataset
     """
     True iterable dataset that streams samples one by one from JSONL file.
     """
@@ -238,22 +238,22 @@ class IterableSupervisedDatasetLVR(IterableDataset):  # ✅ 继承 IterableDatas
                         self.image_resized_h
                     ))
 
-                # Extract LVR tokens
+                # Extract SLVR tokens
                 inputs_for_grid = self.processor(
                     text=[""], images=images, videos=videos,
                     padding=False, do_resize=False, return_tensors='pt'
                 )
                 image_grid_thw = inputs_for_grid['image_grid_thw']
-                lvr_token_idxs_list = self.bbox_to_token_idxs(sources['bboxes'], image_grid_thw)
+                slvr_token_idxs_list = self.bbox_to_token_idxs(sources['bboxes'], image_grid_thw)
 
                 text_embedding = None
                 if "emb" in sources:
                     text_embedding = torch.tensor(sources["emb"], dtype=torch.float32)
 
-                sources = copy.deepcopy(llava_to_openai_lvr(
+                sources = copy.deepcopy(llava_to_openai_slvr(
                     sources['conversations'],
                     is_video=is_video,
-                    lvr_token_idxs_list=lvr_token_idxs_list,
+                    slvr_token_idxs_list=slvr_token_idxs_list,
                     latent_end_token=self.latent_end_token
                 ))
 
@@ -337,15 +337,15 @@ class IterableSupervisedDatasetLVR(IterableDataset):  # ✅ 继承 IterableDatas
                 labels = torch.cat(all_labels, dim=0).to(torch.long)
                 attention_mask = (input_ids > -1000000).to(torch.long)
 
-                lvr_tokens = [
-                    torch.tensor(group, dtype=torch.int) for group in lvr_token_idxs_list
+                slvr_tokens = [
+                    torch.tensor(group, dtype=torch.int) for group in slvr_token_idxs_list
                 ]
 
                 data_dict = {
                     'input_ids': input_ids,
                     'attention_mask': attention_mask,
                     'labels': labels,
-                    'lvr_tokens': lvr_tokens,
+                    'slvr_tokens': slvr_tokens,
                     'input_lengths': torch.tensor([input_ids.size(0)]),
                 }
                 
@@ -439,8 +439,8 @@ class PackedDataset(IterableDataset):
         self.img_start_token_id = self.tokenizer.convert_tokens_to_ids(VISION_START_TOKEN)
         self.img_token_id = self.tokenizer.convert_tokens_to_ids(DEFAULT_IMAGE_TOKEN)
         self.img_end_token_id = self.tokenizer.convert_tokens_to_ids(VISION_END_TOKEN)
-        self.lvr_token_id = self.tokenizer.convert_tokens_to_ids(LVR_TOKEN)
-        self.lvr_text_token_id = self.tokenizer.convert_tokens_to_ids(SEM_TOKEN)
+        self.slvr_token_id = self.tokenizer.convert_tokens_to_ids(SLVR_TOKEN)
+        self.slvr_text_token_id = self.tokenizer.convert_tokens_to_ids(SEM_TOKEN)
         assert self.img_start_token_id != self.tokenizer.unk_token_id
         assert self.img_token_id != self.tokenizer.unk_token_id
         assert self.img_end_token_id != self.tokenizer.unk_token_id
@@ -603,7 +603,7 @@ class PackedDataset(IterableDataset):
 
         assert buffer.keys() == new_sample.keys()
         for k in buffer:
-            if k == 'lvr_tokens':
+            if k == 'slvr_tokens':
                 buffer[k] = buffer[k] + new_sample[k]
             else:
                 buffer[k] = torch.cat([buffer[k], new_sample[k]])
@@ -611,7 +611,7 @@ class PackedDataset(IterableDataset):
 
     @staticmethod
     def split_buffer(buffer, max_tokens, img_start_token_id, img_token_id, img_end_token_id,
-                 lvr_token_id, lvr_text_token_id,long_seq_threshold, max_instance_per_batch):  
+                 slvr_token_id, slvr_text_token_id,long_seq_threshold, max_instance_per_batch):  
         if not long_seq_threshold:
             long_seq_threshold = max_tokens // 2
 
@@ -636,23 +636,23 @@ class PackedDataset(IterableDataset):
                 cut_id = min(max_tokens, buffer['input_ids'].size(0))
 
                 if not _image_is_splitted(buffer['input_ids'], cut_id):
-                    # count discarded lvr tokens before slicing
+                    # count discarded slvr tokens before slicing
 
-                    if lvr_token_id is not None:
-                        num_discarded_lvr_tokens = (buffer['input_ids'][cut_id:] == lvr_token_id).sum().item()
-                        cut_id_lvr = buffer['lvr_tokens'][0].size(0)-num_discarded_lvr_tokens
-                    if lvr_text_token_id is not None:
-                        num_discarded_lvr_text_tokens = (buffer['input_ids'][cut_id:] == lvr_text_token_id).sum().item()
+                    if slvr_token_id is not None:
+                        num_discarded_slvr_tokens = (buffer['input_ids'][cut_id:] == slvr_token_id).sum().item()
+                        cut_id_slvr = buffer['slvr_tokens'][0].size(0)-num_discarded_slvr_tokens
+                    if slvr_text_token_id is not None:
+                        num_discarded_slvr_text_tokens = (buffer['input_ids'][cut_id:] == slvr_text_token_id).sum().item()
                         # 假设text_embedding存储在buffer['text_embedding']
                         if 'text_embedding' in buffer and buffer['text_embedding'] is not None:
-                            buffer['text_embedding'] = buffer['text_embedding'][:buffer['text_embedding'].size(0) - num_discarded_lvr_text_tokens]
+                            buffer['text_embedding'] = buffer['text_embedding'][:buffer['text_embedding'].size(0) - num_discarded_slvr_text_tokens]
                     for k in buffer:
                         if k in ['input_ids', 'labels', 'attention_mask', 'position_ids', 'data_index']:
                             buffer[k] = buffer[k][:cut_id]
                         elif k in ['pixel_values', 'image_flags','image_grid_thw']:
                             buffer[k] = buffer[k]
-                        elif k in ['lvr_tokens']:
-                            buffer[k][0] = buffer[k][0][:cut_id_lvr]
+                        elif k in ['slvr_tokens']:
+                            buffer[k][0] = buffer[k][0][:cut_id_slvr]
                         elif k == 'text_embedding':
                             buffer[k] = buffer[k]
                         elif k in ['input_lengths']:
@@ -697,7 +697,7 @@ class PackedDataset(IterableDataset):
                         elif k in ['pixel_values', 'image_flags']:
                             buffer_right[k] = buffer[k][-image_cut_idx_right_size:]
                             buffer[k] = buffer[k][:-image_cut_idx_right_size]
-                        elif k in ['lvr_tokens','image_grid_thw','input_lengths']:
+                        elif k in ['slvr_tokens','image_grid_thw','input_lengths']:
                             buffer_right[k] = buffer[k][-1:]
                             buffer[k] = buffer[k][:-1]
                         elif k == 'text_embedding':
@@ -726,8 +726,8 @@ class PackedDataset(IterableDataset):
             img_start_token_id=self.img_start_token_id,
             img_token_id=self.img_token_id,
             img_end_token_id=self.img_end_token_id,
-            lvr_token_id=self.lvr_token_id,
-            lvr_text_token_id=self.lvr_text_token_id,
+            slvr_token_id=self.slvr_token_id,
+            slvr_text_token_id=self.slvr_text_token_id,
             long_seq_threshold=self.long_seq_threshold,
             max_instance_per_batch=self.max_instance_per_batch
         )
@@ -877,7 +877,7 @@ class PackedDataset(IterableDataset):
 
 WARNING_CNT = defaultdict(int)
 
-class PackedDataCollatorForSupervisedDatasetLVR(object):
+class PackedDataCollatorForSupervisedDatasetSLVR(object):
 
     def __init__(self,pad_token_id):
         self.pad_token_id = pad_token_id 
@@ -894,7 +894,7 @@ class PackedDataCollatorForSupervisedDatasetLVR(object):
         all_attention_masks = []
         all_labels = []
 
-        all_lvr_tokens = []
+        all_slvr_tokens = []
         all_pixel_values = []
         all_image_grid_thw = []
         all_text_embedding = []
@@ -904,7 +904,7 @@ class PackedDataCollatorForSupervisedDatasetLVR(object):
             all_attention_masks.extend(torch.split(feature["attention_mask"], feature["input_lengths"].tolist()))
             all_labels.extend(torch.split(feature["labels"], feature["input_lengths"].tolist()))
 
-            all_lvr_tokens.extend(feature['lvr_tokens'])
+            all_slvr_tokens.extend(feature['slvr_tokens'])
             all_pixel_values.append(feature['pixel_values'])
             all_image_grid_thw.append(feature['image_grid_thw'])
             all_text_embedding.append(feature['text_embedding'])
@@ -932,7 +932,7 @@ class PackedDataCollatorForSupervisedDatasetLVR(object):
             "attention_mask": torch.stack(padded_attention_masks),
             "labels": torch.stack(padded_labels),
 
-            "lvr_tokens": all_lvr_tokens,
+            "slvr_tokens": all_slvr_tokens,
             "pixel_values": torch.cat(all_pixel_values),
             "image_grid_thw": torch.cat(all_image_grid_thw),
             "text_embedding": torch.stack(all_text_embedding)
@@ -1013,7 +1013,7 @@ class PackedDataCollatorForSupervisedDatasetLVR(object):
     #         return token_idx_list
     
 
-# def collate_fn_for_packed_lvr(
+# def collate_fn_for_packed_slvr(
 #     features,
 #     pad_token_id: int,
 # ):
@@ -1025,7 +1025,7 @@ class PackedDataCollatorForSupervisedDatasetLVR(object):
 #     all_attention_masks = []
 #     all_labels = []
 
-#     all_lvr_tokens = []
+#     all_slvr_tokens = []
 #     all_pixel_values = []
 #     all_image_grid_thw = []
 
@@ -1035,7 +1035,7 @@ class PackedDataCollatorForSupervisedDatasetLVR(object):
 #         all_attention_masks.extend(torch.split(feature["attention_mask"], feature["input_lengths"].tolist()))
 #         all_labels.extend(torch.split(feature["labels"], feature["input_lengths"].tolist()))
 
-#         all_lvr_tokens.extend(feature['lvr_tokens'])
+#         all_slvr_tokens.extend(feature['slvr_tokens'])
 #         all_pixel_values.append(feature['pixel_values'])
 #         all_image_grid_thw.append(feature['image_grid_thw'])
     
@@ -1070,7 +1070,7 @@ class PackedDataCollatorForSupervisedDatasetLVR(object):
 #     #     "attention_mask": attention_mask.unsqueeze(0),
 #     #     "labels": labels.unsqueeze(0),
 
-#     #     "lvr_tokens": all_lvr_tokens,
+#     #     "slvr_tokens": all_slvr_tokens,
 #     #     "pixel_values": pixel_values.unsqueeze(0),
 #     #     "image_grid_thw": image_grid_thw.unsqueeze(0),
 #     #     }    
@@ -1080,7 +1080,7 @@ class PackedDataCollatorForSupervisedDatasetLVR(object):
 #         "attention_mask": attention_mask,
 #         "labels": labels,
 
-#         "lvr_tokens": all_lvr_tokens,
+#         "slvr_tokens": all_slvr_tokens,
 #         "pixel_values": pixel_values,
 #         "image_grid_thw": image_grid_thw,
 #         }    

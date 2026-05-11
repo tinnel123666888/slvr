@@ -16,14 +16,14 @@ from src.constants import (
     SYSTEM_MESSAGE,
 )
 
-from .data_utils import get_image_info, get_video_info, llava_to_openai_lvr, pad_sequence
+from .data_utils import get_image_info, get_video_info, llava_to_openai_slvr, pad_sequence
 import numpy as np
 from PIL import Image
 from typing import List, Tuple
 import math
 
-class SupervisedDatasetLVR(Dataset):
-    """Dataset for supervised fine-tuning LVR model."""
+class SupervisedDatasetSLVR(Dataset):
+    """Dataset for supervised fine-tuning SLVR model."""
 
     def __init__(
         self,
@@ -34,7 +34,7 @@ class SupervisedDatasetLVR(Dataset):
         padding=True,
         latent_end_token=False,
     ):
-        super(SupervisedDatasetLVR, self).__init__()
+        super(SupervisedDatasetSLVR, self).__init__()
         if isinstance(data_path, str):
             list_data_dict = json.load(open(data_path, "r"))
         else:
@@ -96,7 +96,7 @@ class SupervisedDatasetLVR(Dataset):
         bboxes: List[Tuple[float, float, float, float]]
     ) -> List[np.ndarray]:
         image_masks = self.make_bbox_masks_rgb(images, bboxes)
-        lvr_token_idxs_list = []
+        slvr_token_idxs_list = []
         
         for image_mask in image_masks:
             image_masks_processed, _ = self.processor.image_processor._preprocess(
@@ -110,8 +110,8 @@ class SupervisedDatasetLVR(Dataset):
                 do_convert_rgb=False,
             )
             idxs = np.where(np.any(image_masks_processed != 0, axis=1))[0]
-            lvr_token_idxs_list.append(idxs)
-        return lvr_token_idxs_list
+            slvr_token_idxs_list.append(idxs)
+        return slvr_token_idxs_list
 
     def bbox_to_token_idxs_manual(
             self,  
@@ -197,13 +197,13 @@ class SupervisedDatasetLVR(Dataset):
 
         # 提取bounding boxes
         bboxes = sources['bboxes']
-        lvr_token_idxs_list_manual = self.bbox_to_token_idxs_manual(images, bboxes)
+        slvr_token_idxs_list_manual = self.bbox_to_token_idxs_manual(images, bboxes)
 
         # 使用latent_end_token参数
-        sources = copy.deepcopy(llava_to_openai_lvr(
+        sources = copy.deepcopy(llava_to_openai_slvr(
             sources['conversations'], 
             is_video=is_video,
-            lvr_token_idxs_list=lvr_token_idxs_list_manual,
+            slvr_token_idxs_list=slvr_token_idxs_list_manual,
             latent_end_token=self.latent_end_token
         ))
 
@@ -291,18 +291,18 @@ class SupervisedDatasetLVR(Dataset):
         labels = torch.cat(all_labels, dim=0).to(torch.long)
         attention_mask = (input_ids > -1000000).to(torch.long)
 
-        lvr_tokens = []
-        for item_img in lvr_token_idxs_list_manual:
+        slvr_tokens = []
+        for item_img in slvr_token_idxs_list_manual:
             group_lst = []
             for group in item_img:
                 group_lst.append(torch.tensor(group))
-            lvr_tokens.append(group_lst)
+            slvr_tokens.append(group_lst)
 
         data_dict = dict(
             input_ids=input_ids,
             attention_mask=attention_mask,
             labels=labels,
-            lvr_tokens=lvr_tokens
+            slvr_tokens=slvr_tokens
         )
 
         # 添加text_embedding到data_dict
@@ -321,7 +321,7 @@ class SupervisedDatasetLVR(Dataset):
         
         return data_dict
 
-class DataCollatorForSupervisedDatasetLVR(object):
+class DataCollatorForSupervisedDatasetSLVR(object):
     """Collate examples for supervised fine-tuning."""
 
     def __init__(self, pad_token_id: int):
@@ -335,7 +335,7 @@ class DataCollatorForSupervisedDatasetLVR(object):
         batch_video_thw = []
         batch_image_thw = []
         batch_second_per_grid_ts = []
-        batch_lvr_tokens = []
+        batch_slvr_tokens = []
         batch_text_embeddings = []  # 新增：收集text_embedding
 
         for example in examples:
@@ -364,14 +364,14 @@ class DataCollatorForSupervisedDatasetLVR(object):
         attention_mask = input_ids != self.pad_token_id
         labels = pad_sequence(batch_label_ids, padding_side='right', padding_value=IGNORE_INDEX)
 
-        lvr_tokens = [example['lvr_tokens'] for example in examples]
-        lvr_tokens_all_local_indices = [torch.tensor(idx) for group in lvr_tokens for idx in group]
+        slvr_tokens = [example['slvr_tokens'] for example in examples]
+        slvr_tokens_all_local_indices = [torch.tensor(idx) for group in slvr_tokens for idx in group]
 
         data_dict = {
             'input_ids': input_ids,
             'labels': labels,
             'attention_mask': attention_mask,
-            'lvr_tokens': lvr_tokens_all_local_indices
+            'slvr_tokens': slvr_tokens_all_local_indices
         }
 
         # 如果有text_embedding，添加到data_dict
@@ -395,16 +395,16 @@ class DataCollatorForSupervisedDatasetLVR(object):
 
         return data_dict
     
-def make_supervised_data_module_lvr(model_id, processor, data_args, latent_end_token=False):
+def make_supervised_data_module_slvr(model_id, processor, data_args, latent_end_token=False):
     """Make dataset and collator for supervised fine-tuning."""
-    sft_dataset = SupervisedDatasetLVR(
+    sft_dataset = SupervisedDatasetSLVR(
         data_path=data_args.data_path, 
         processor=processor, 
         data_args=data_args, 
         model_id=model_id,
         latent_end_token=latent_end_token
     )
-    data_collator = DataCollatorForSupervisedDatasetLVR(pad_token_id=processor.tokenizer.pad_token_id)
+    data_collator = DataCollatorForSupervisedDatasetSLVR(pad_token_id=processor.tokenizer.pad_token_id)
 
     return dict(train_dataset=sft_dataset,
                 eval_dataset=None,
