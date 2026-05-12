@@ -552,11 +552,12 @@ class QwenGRPO2QTrainer(Trainer):
         # it's safer to set it in all cases.
         set_seed(args.seed, device_specific=True)
 
+        rollout_do_sample = os.getenv("MGRPO_ROLLOUT_DO_SAMPLE", "1").strip().lower() in ("1", "true", "yes", "y", "on")
         self.generation_config = GenerationConfig(
                 max_new_tokens=self.max_completion_length,
-            # Keep rollout generation aligned with inference behavior.
-            # This avoids latent-phase token noise corrupting the KV cache.
-            do_sample=False,
+            # RL rollout should be stochastic by default; deterministic rollout
+            # removes exploration and often leads to early format collapse.
+            do_sample=rollout_do_sample,
                 pad_token_id=processing_class.tokenizer.pad_token_id,
                 eos_token_id=processing_class.tokenizer.eos_token_id,
                 temperature=self.temperature,

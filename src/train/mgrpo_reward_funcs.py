@@ -223,15 +223,21 @@ def accuracy_reward(completions, assistant, prompts=None, **kwargs):
     assistant:   list of dicts  [{"text1-answer": ..., "text2-answer": ...}, ...]
     prompts:     list of prompt dicts (used to extract question text)
 
-    Returns list[float] — one value per sample, averaged over both questions.
+    Returns list[float] — one value per sample, weighted combination over both questions.
+    q2 weight is controlled by env var MGRPO_ACC_Q2_WEIGHT (default 0.3).
     """
+    q2_weight = float(os.getenv("MGRPO_ACC_Q2_WEIGHT", "0.3"))
+    q2_weight = min(max(q2_weight, 0.0), 1.0)
+    q1_weight = 1.0 - q2_weight
+    norm = max(q1_weight + q2_weight, 1e-8)
+
     # Distributed training stability mode: bypass remote LLM judge and use deterministic fallback only.
     if os.getenv("MGRPO_DISABLE_LLM_JUDGE", "0") == "1":
         rewards = []
         for comp, sol in zip(completions, assistant):
             s1 = _string_match_fallback(comp.get("text1-answer", ""), sol.get("text1-answer", ""))
             s2 = _string_match_fallback(comp.get("text2-answer", ""), sol.get("text2-answer", ""))
-            rewards.append((s1 + s2) / 2.0)
+            rewards.append((q1_weight * s1 + q2_weight * s2) / norm)
         return rewards
 
     _ensure_judge_ready()
@@ -303,7 +309,9 @@ def accuracy_reward(completions, assistant, prompts=None, **kwargs):
             per_item[idx].extend([0.0] * missing)
 
     for idx, scores in per_item.items():
-        rewards[idx] = sum(scores) / max(len(scores), 1)
+        s1 = scores[0] if len(scores) > 0 else 0.0
+        s2 = scores[1] if len(scores) > 1 else 0.0
+        rewards[idx] = (q1_weight * s1 + q2_weight * s2) / norm
 
     if os.getenv("DEBUG_MODE") == "true":
         log_path = os.getenv("LOG_PATH", "/tmp/mgrpo_debug.log")
@@ -320,7 +328,6 @@ def format_reward(completions, **kwargs):
     """
     Check that each answer strictly follows the SLVR output format in order:
       1) Output starts with <|vision_start|>  (leading whitespace is stripped)
-         Bypass (missing <|vision_start|>) is penalised: contributes -1.0 per sub-answer.
       2) At least MIN_SLVR_LATENT_STEPS <|vision_end|> tokens must appear between
          <|vision_start|> and <sem> (the visual latent placeholders).
       3) <sem> appears within N<=10 tokens after <|vision_start|>
@@ -330,11 +337,11 @@ def format_reward(completions, **kwargs):
          (same token counting: <|vision_end|> and non-empty text segments each count as 1)
       5) </answer> must appear after <answer>
 
-        Per sub-answer scoring:
-             0.0  full format correct (checks 1-5)
-            -0.5  any malformed case (including bypass)
+           Per sub-answer scoring:
+               1.0  full format correct (checks 1-5)
+               0.0  any malformed case (including bypass)
 
-        Returns sum over both sub-answers: range [-1.0, 0.0].
+           Returns average over both sub-answers: range [0.0, 1.0].
     """
     SLVR_START = "<|vision_start|>"
     SLVR_TEXT_START = "<sem>"
@@ -357,44 +364,44 @@ def format_reward(completions, **kwargs):
         return slvr_end_count + non_end_tokens
 
     def check_format(text):
-        """Return 0.0 (valid) or -0.5 (malformed)."""
+        """Return 1.0 (valid) or 0.0 (malformed)."""
         text = text.lstrip()
 
         # Must start with <|vision_start|>
         if not text.startswith(SLVR_START):
-            return -0.5
+            return 0.0
 
         after_start = text[len(SLVR_START):]
 
         # <sem> must appear, and gap must be <=MAX_SLVR_STEPS tokens
         ts_idx = after_start.find(SLVR_TEXT_START)
         if ts_idx == -1:
-            return -0.5
+            return 0.0
         between_start_ts = after_start[:ts_idx]
         if _count_tokens_in_segment(between_start_ts) > MAX_SLVR_STEPS:
-            return -0.5
+            return 0.0
 
         # Require at least MIN_SLVR_LATENT_STEPS <|vision_end|> in visual span
         if between_start_ts.count(SLVR_END) < MIN_SLVR_LATENT_STEPS:
-            return -0.5
+            return 0.0
 
         after_ts = after_start[ts_idx + len(SLVR_TEXT_START):]
 
         # <answer> must appear after <sem>, gap must be 1-3 tokens
         ans_idx = after_ts.find(ANSWER_START)
         if ans_idx == -1:
-            return -0.5
+            return 0.0
         between_ts_ans = after_ts[:ans_idx]
         gap = _count_tokens_in_segment(between_ts_ans)
         if gap < 1 or gap > MAX_ANSWER_GAP:
-            return -0.5
+            return 0.0
 
         # </answer> must appear after <answer>
         after_ans = after_ts[ans_idx + len(ANSWER_START):]
         if ANSWER_END not in after_ans:
-            return -0.5
+            return 0.0
 
-        return 0.0
+        return 1.0
 
     rewards = []
     for comp in completions:
@@ -402,5 +409,5 @@ def format_reward(completions, **kwargs):
         for key in ["text1-answer", "text2-answer"]:
             text = comp.get(key, "")
             score += check_format(text)
-        rewards.append(score)   # range: -1.0 to 0.0
+        rewards.append(score / 2.0)   # range: 0.0 to 1.0
     return rewards

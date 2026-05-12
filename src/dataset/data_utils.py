@@ -19,6 +19,8 @@ from src.constants import (
 
 )
 
+LEGACY_SLVR_PLACEHOLDERS = ("<lvr>", "<lvr_text>")
+
 
 def replace_image_tokens(input_string, is_video=False):
     if is_video:
@@ -32,6 +34,10 @@ def replace_image_tokens(input_string, is_video=False):
 
 def replace_slvr_tokens(input_string, slvr_token_idxs_list, latent_end_token, fixed_num_of_slvr_tokens):
     '''Video not implemented'''
+    # Backward compatibility: support legacy dataset placeholders.
+    input_string = input_string.replace("<lvr_text>", SEM_PLACEHOLDER)
+    input_string = input_string.replace("<lvr>", SLVR_PLACEHOLDER)
+
     # 处理普通SLVR tokens
     if SLVR_PLACEHOLDER in input_string:
         parts = input_string.split(SLVR_PLACEHOLDER)

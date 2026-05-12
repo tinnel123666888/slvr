@@ -789,13 +789,13 @@ class QwenMGRPOTrainer(QwenGRPO2QTrainer):
             r_stab = torch.zeros(len(completions), device=device)
 
         # ---- Gate rewards on format / extractability ----
-        # If a sample has no valid SLVR format (format_score < 0), the model
+        # If a sample has no valid SLVR format (format_score <= 0), the model
         # cannot meaningfully extract a structured answer, so zero out its
         # accuracy reward.  This makes format a hard prerequisite for earning
         # accuracy signal and prevents the bypass strategy from being rewarded.
         # Additionally, only compute latent consistency/stability when both
         # query completions have extractable latent spans.
-        no_format_mask = (format_scores < 0)   # (N_completions,)
+        no_format_mask = (format_scores <= 0)   # (N_completions,)
         for fi, rname in enumerate(self.reward_func_names):
             if "accuracy" in rname.lower():
                 rewards_per_func[:, fi] = rewards_per_func[:, fi] * (~no_format_mask).float()
@@ -818,7 +818,11 @@ class QwenMGRPOTrainer(QwenGRPO2QTrainer):
         sg = sg.repeat_interleave(self.num_generations, 0)
         adv = rewards - mg
         if self.scale_rewards:
-            adv = adv / (sg + 1e-4)
+            adv_norm_eps = float(os.getenv("MGRPO_ADV_NORM_EPS", "1e-3"))
+            adv = adv / (sg + max(adv_norm_eps, 1e-8))
+        adv_clip = float(os.getenv("MGRPO_ADV_CLIP", "5.0"))
+        if adv_clip > 0:
+            adv = torch.clamp(adv, min=-adv_clip, max=adv_clip)
         pslice = slice(
             self.accelerator.process_index * len(prompts),
             (self.accelerator.process_index + 1) * len(prompts),

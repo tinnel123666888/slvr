@@ -1,8 +1,8 @@
 [
     {
         "ds_name":  "viscot",
-        "data_path": "/path/to/your/training_data.jsonl",
-        "image_folder": "/path/to/your/images/",
+        "data_path": "/mnt/cephfs/home/tinnelxu/dataset/test_slvr_region/train_json/train_slvr45_plus_viscot387k_shuffled.jsonl",
+        "image_folder": "/mnt/cephfs/home/tinnelxu/dataset/",
         "ds_type": "Q_A"
     }
     
