@@ -148,9 +148,13 @@ python inf_batch_dir_old.py
 If you find this work useful, please cite our paper:
 
 ```bibtex
-@inproceedings{sslvr2026,
-  title     = {Semantic-Enriched Latent Visual Reasoning},
-  booktitle = {Proceedings of the 43rd International Conference on Machine Learning (ICML)},
-  year      = {2026},
+@misc{xu2026semanticenrichedlatentvisualreasoning,
+  title={Semantic-Enriched Latent Visual Reasoning},
+  author={Tianrun Xu and Yue Sun and Qixun Wang and Jingyi Lu and Yuan Wang and Tianren Zhang and Longteng Guo and Fengyun Rao and Jing Lyu and Feng Chen and Jing Liu},
+  year={2026},
+  eprint={2605.19342},
+  archivePrefix={arXiv},
+  primaryClass={cs.CV},
+  url={https://arxiv.org/abs/2605.19342},
 }
 ```

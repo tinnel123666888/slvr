@@ -59,6 +59,7 @@ NUM_DEVICES=8
 BATCH_PER_DEVICE=1
 GRAD_ACCUM_STEPS=4
 NUM_GENERATIONS=2
+MAX_STEPS=1000
 
 MAX_COMPLETION_LENGTH=512
 MAX_PROMPT_LENGTH=10024
@@ -136,6 +137,7 @@ deepspeed src/train/train_mgrpo.py \
     --temperature $TEMP \
     --beta $BETA \
     --num_train_epochs 1 \
+    --max_steps $MAX_STEPS \
     --num_generations $NUM_GENERATIONS \
     --per_device_train_batch_size $BATCH_PER_DEVICE \
     --gradient_accumulation_steps $GRAD_ACCUM_STEPS \
