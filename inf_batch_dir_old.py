@@ -26,7 +26,7 @@ from qwen_vl_utils import process_vision_info
 # ==========================================
 class Config:
     STEP = "6287"
-    MODEL_PATH = f"./stage1_checkpoints_0409_1/checkpoint-{STEP}"
+    MODEL_PATH = f"./stage1_checkpoints/checkpoint-{STEP}"
 
     # <<< changed >>> 改成目录
     INPUT_DIR = "/path/to/your/test_dataset"
