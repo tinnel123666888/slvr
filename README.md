@@ -17,7 +17,7 @@ Official training and inference code for **SLVR**, accepted at ICML 2026.
 
 ```bash
 conda env create -f environment.yaml
-conda activate sslvr
+conda activate slvr
 pip install qwen-vl-utils
 pip install flash-attn --no-build-isolation
 ```
