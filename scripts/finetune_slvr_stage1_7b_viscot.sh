@@ -18,7 +18,7 @@ MAX_PACKED_TOKENS=$((MAX_INSTANCE_PER_BATCH * LST))
 
 
 RANDOM_SEED=42
-DATA_PATH="${DATA_PATH:-/mnt/cephfs/home/tinnelxu/icml/models/slvr_release/meta_viscot.json}"
+DATA_PATH="${DATA_PATH:-your data}"
 
 # General training params
 GLOBAL_BATCH_SIZE=64       # global_batch_size becomes irrelevant when use data packing
